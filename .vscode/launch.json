@@ -1,0 +1,23 @@
+{
+    "configurations": [
+
+
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "debug main.py",
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env"
+        },
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "main.py",
+            "noDebug": true,
+            "program": "${workspaceFolder}/main.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env"
+        },
+    ]
+}
