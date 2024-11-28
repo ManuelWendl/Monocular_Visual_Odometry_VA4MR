@@ -1,9 +1,9 @@
 import os
 import numpy as np
 import cv2
-
+from Initilization import initialization, draw_matches, plot_3d_points
 # Setup
-ds = 2  # 0: KITTI, 1: Malaga, 2: parking
+ds = 0  # 0: KITTI, 1: Malaga, 2: parking
 
 # Parking paths
 kitti_path = './data/kitti'
@@ -64,6 +64,11 @@ elif ds == 2:
 else:
     raise ValueError("Invalid dataset selection")
 
+#Initialisation:
+R, t, points3D, keypoints0, keypoints1, matches = initialization(img0, img1, K)
+draw_matches(img0, img1, keypoints0, keypoints1, matches)
+plot_3d_points(points3D)
+"""
 # Continuous operation
 for i in range(bootstrap_frames[1] + 1, last_frame + 1):
     print(f'\n\nProcessing frame {i}\n=====================')
@@ -82,3 +87,4 @@ for i in range(bootstrap_frames[1] + 1, last_frame + 1):
     cv2.waitKey(1)
     
     prev_img = image
+"""
