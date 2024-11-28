@@ -16,7 +16,20 @@ def initialization(img0, img1, K):
 
     # Sort matches by distance
     matches = sorted(matches, key=lambda x: x.distance)
+    """
+    knn_matches = bf.knnMatch(descriptors0, descriptors1, k=3)
 
+    # Apply ratio test
+    ratio_thresh=0.8
+    good_matches = []
+    for m, n in knn_matches:
+        if m.distance < ratio_thresh * n.distance:
+            good_matches.append(m)
+
+    good_matches = sorted(good_matches, key=lambda x: x.distance)
+
+    matches=good_matches #matches =matches for comparison
+    """
     # Extract matched keypoints
     pts0 = np.float32([keypoints0[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
     pts1 = np.float32([keypoints1[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
@@ -27,40 +40,42 @@ def initialization(img0, img1, K):
     pts0_norm = cv2.undistortPoints(pts0, K, None)
     pts1_norm = cv2.undistortPoints(pts1, K, None)
 
-    # Estimate Fundamental matrix using the 8-point algorithm
-    F, mask = cv2.findFundamentalMat(pts0_norm, pts1_norm, cv2.FM_8POINT)
-
-    # Convert Fundamental matrix to Essential matrix
-    E = K.T @ F @ K
+    #filter with RANSAC
+    F, mask_RANSAC = cv2.findFundamentalMat(pts0_norm, pts1_norm, cv2.FM_RANSAC, ransacReprojThreshold=1.0, confidence=0.99)
 
     # Use the mask to filter inliers
-    pts0 = pts0[mask.ravel() == 1]
-    pts1 = pts1[mask.ravel() == 1]
+    pts0_inliers = pts0[mask_RANSAC.ravel() == 1]
+    pts1_inliers = pts1[mask_RANSAC.ravel() == 1]
+
+    pts0_inliers = cv2.undistortPoints(pts0_inliers, K, None) #recommeded by the CoPilot, probably not necessary
+    pts1_inliers = cv2.undistortPoints(pts1_inliers, K, None)
+
+
+    # Estimate Fundamental matrix using the 8-point algorithm
+    E, mask_es = cv2.findEssentialMat(pts0_inliers, pts1_inliers, K, cv2.FM_8POINT)
 
     # Recover relative camera pose
-    _, R, t, mask = cv2.recoverPose(E, pts0, pts1, K)
+    _, R, t, mask_pose = cv2.recoverPose(E, pts0_inliers, pts1_inliers, K)
 
-    print(f"pts0 shape: {pts0.shape}")
-    print(f"pts1 shape: {pts1.shape}")
-    print(f"R shape: {R.shape}")
-    print(f"t shape: {t.shape}")
+    print("R:", R)
+    print("t:", t)
 
     # Ensure pts0 and pts1 are in the correct shape for triangulation
     if pts0.shape[0] < 8 or pts1.shape[0] < 8:
         raise ValueError("Not enough inlier points for triangulation")
 
-    pts0 = pts0.reshape(2, -1)
-    pts1 = pts1.reshape(2, -1)
+    pts0 = pts0_inliers.reshape(2, -1)
+    pts1 = pts1_inliers.reshape(2, -1)
 
     points4D = cv2.triangulatePoints(np.hstack((np.eye(3), np.zeros((3, 1)))), np.hstack((R, t)), pts0, pts1)
     points3D = points4D[:3] / points4D[3]
 
     # Triangulate points to reconstruct 3D landmarks
 
-    return R, t, points3D, keypoints0, keypoints1, matches
+    return R, t, points3D, pts0, pts1, keypoints0, keypoints1, matches, mask_RANSAC
 
-def draw_matches(img0, img1, keypoints0, keypoints1, matches):
-    img_matches = cv2.drawMatches(img0, keypoints0, img1, keypoints1, matches[:10], None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+def draw_matches(img0, img1, keypoints0, keypoints1, matches, mask):
+    img_matches = cv2.drawMatches(img0, keypoints0, img1, keypoints1, matches[:30], None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     plt.figure(figsize=(20, 10))
     plt.imshow(img_matches)
     plt.title('Keypoint Matches')
@@ -74,4 +89,26 @@ def plot_3d_points(points3D):
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     plt.title('3D Points')
+    plt.show()
+
+def plot_inlier_points(img0, img1, pts0_inliers, pts1_inliers):
+    # Draw inlier points on the images
+    img0_inliers = img0.copy()
+    img1_inliers = img1.copy()
+
+    for i in range(pts0_inliers.shape[1]):
+        cv2.circle(img0_inliers, (int(pts0_inliers[0][i]), int(pts0_inliers[1][i])), 10, (255, 255, 255), 50)
+        #print("test")
+
+    for i in range(pts1_inliers.shape[1]):
+        cv2.circle(img1_inliers, (int(pts1_inliers[0][i]), int(pts1_inliers[1][i])), 5, (0, 255, 0), 50)
+
+    # Plot the images with inlier points
+    plt.figure(figsize=(20, 10))
+    plt.subplot(1, 2, 1)
+    plt.imshow(cv2.cvtColor(img0_inliers),cv2.COLOR_BGR2RGB )#
+    plt.title('Inlier Points in Image 0')
+    plt.subplot(1, 2, 2)
+    plt.imshow(cv2.cvtColor(img1_inliers), , cv2.COLOR_BGR2RGB) #
+    plt.title('Inlier Points in Image 1')
     plt.show()

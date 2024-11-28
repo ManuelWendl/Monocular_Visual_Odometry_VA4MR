@@ -1,7 +1,7 @@
 import os
 import numpy as np
 import cv2
-from Initilization import initialization, draw_matches, plot_3d_points
+from Initilization import initialization, draw_matches, plot_3d_points, plot_inlier_points
 # Setup
 ds = 0  # 0: KITTI, 1: Malaga, 2: parking
 
@@ -65,9 +65,10 @@ else:
     raise ValueError("Invalid dataset selection")
 
 #Initialisation:
-R, t, points3D, keypoints0, keypoints1, matches = initialization(img0, img1, K)
-draw_matches(img0, img1, keypoints0, keypoints1, matches)
+R, t, points3D, pts0, pts1, keypoints0, keypoints1, matches, mask = initialization(img0, img1, K)
+draw_matches(img0, img1, keypoints0, keypoints1, matches, mask)
 plot_3d_points(points3D)
+plot_inlier_points(img0, img1, pts0, pts1)  
 """
 # Continuous operation
 for i in range(bootstrap_frames[1] + 1, last_frame + 1):
