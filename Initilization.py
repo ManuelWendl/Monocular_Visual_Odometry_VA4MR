@@ -72,7 +72,6 @@ def initialization(img0, img1, K):
 
     points4D = cv2.triangulatePoints(np.hstack((np.eye(3), np.zeros((3, 1)))), np.hstack((R, t)), pts0, pts1)
     points3D = points4D[:3] / points4D[3]
-    #print("points3D:", points3D)
     # Triangulate points to reconstruct 3D landmarks
 
     return R, t, points3D, pts_0_ex, pts_1_ex, keypoints0, keypoints1, matches, mask_RANSAC
