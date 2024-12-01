@@ -42,7 +42,7 @@ else:
     raise ValueError("Invalid dataset selection")
 
 # Bootstrap
-bootstrap_frames = [0,30]
+bootstrap_frames = [0,5]
 # need to set bootstrap_frames
 if ds == 0:
     img0 = cv2.imread(os.path.join(kitti_path, '05/image_0', 

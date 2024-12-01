@@ -34,6 +34,9 @@ def initialization(img0, img1, K):
     pts0 = np.float32([keypoints0[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
     pts1 = np.float32([keypoints1[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
 
+    pts_0_ex=pts0
+    pts_1_ex=pts1
+
     # Estimate Essential matrix:
 
     # Normalize points
@@ -69,13 +72,13 @@ def initialization(img0, img1, K):
 
     points4D = cv2.triangulatePoints(np.hstack((np.eye(3), np.zeros((3, 1)))), np.hstack((R, t)), pts0, pts1)
     points3D = points4D[:3] / points4D[3]
-
+    #print("points3D:", points3D)
     # Triangulate points to reconstruct 3D landmarks
 
-    return R, t, points3D, pts0, pts1, keypoints0, keypoints1, matches, mask_RANSAC
+    return R, t, points3D, pts_0_ex, pts_1_ex, keypoints0, keypoints1, matches, mask_RANSAC
 
 def draw_matches(img0, img1, keypoints0, keypoints1, matches, mask):
-    img_matches = cv2.drawMatches(img0, keypoints0, img1, keypoints1, matches[:30], None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+    img_matches = cv2.drawMatches(img0, keypoints0, img1, keypoints1, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
     plt.figure(figsize=(20, 10))
     plt.imshow(img_matches)
     plt.title('Keypoint Matches')
@@ -93,22 +96,46 @@ def plot_3d_points(points3D):
 
 def plot_inlier_points(img0, img1, pts0_inliers, pts1_inliers):
     # Draw inlier points on the images
-    img0_inliers = img0.copy()
-    img1_inliers = img1.copy()
+    # img0_inliers = img0.copy()
+    # img1_inliers = img1.copy()
 
-    for i in range(pts0_inliers.shape[1]):
-        cv2.circle(img0_inliers, (int(pts0_inliers[0][i]), int(pts0_inliers[1][i])), 10, (255, 255, 255), 50)
-        #print("test")
+    # for i in range(pts0_inliers.shape[1]):
+    #     cv2.circle(img0_inliers, (int(pts0_inliers[0][i]), int(pts0_inliers[1][i])), 5, (255, 255, 255), 50)
+    #     print("pts0_inliers[0][i]:", pts0_inliers[0][i])
+    #     print("pts0_inliers[1][i]:", pts0_inliers[1][i])
 
-    for i in range(pts1_inliers.shape[1]):
-        cv2.circle(img1_inliers, (int(pts1_inliers[0][i]), int(pts1_inliers[1][i])), 5, (0, 255, 0), 50)
+    # for i in range(pts1_inliers.shape[1]):
+    #     cv2.circle(img1_inliers, (int(pts1_inliers[0][i]), int(pts1_inliers[1][i])), 1, (255, 255, 255), 50)
+
+    # # Plot the images with inlier points
+    # plt.figure(figsize=(20, 10))
+    # plt.subplot(1, 2, 1)
+    # plt.imshow(cv2.cvtColor(img0_inliers,cv2.COLOR_BGR2RGB) )#
+    # plt.title('Inlier Points in Image 0')
+    # plt.subplot(1, 2, 2)
+    # plt.imshow(cv2.cvtColor(img1_inliers, cv2.COLOR_BGR2RGB)) #
+    # plt.title('Inlier Points in Image 1')
+    # plt.show()
+
+    img0_rgb = cv2.cvtColor(img0, cv2.COLOR_BGR2RGB)
+    img1_rgb = cv2.cvtColor(img1, cv2.COLOR_BGR2RGB)
+
+    # Extract coordinates from pts0_inliers and pts1_inliers
+    pts0_x = pts0_inliers[:, 0, 0]
+    pts0_y = pts0_inliers[:, 0, 1]
+    pts1_x = pts1_inliers[:, 0, 0]
+    pts1_y = pts1_inliers[:, 0, 1]
 
     # Plot the images with inlier points
     plt.figure(figsize=(20, 10))
     plt.subplot(1, 2, 1)
-    plt.imshow(cv2.cvtColor(img0_inliers),cv2.COLOR_BGR2RGB )#
+    plt.imshow(img0_rgb)
+    plt.scatter(pts0_x, pts0_y, c='white', s=20, marker='o')
     plt.title('Inlier Points in Image 0')
+
     plt.subplot(1, 2, 2)
-    plt.imshow(cv2.cvtColor(img1_inliers), , cv2.COLOR_BGR2RGB) #
+    plt.imshow(img1_rgb)
+    plt.scatter(pts1_x, pts1_y, c='white', s=20, marker='o')
     plt.title('Inlier Points in Image 1')
+
     plt.show()
