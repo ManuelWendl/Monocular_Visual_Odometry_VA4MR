@@ -40,18 +40,18 @@ def initialization(img0, img1, K):
     # Estimate Essential matrix:
 
     # Normalize points
-    pts0_norm = cv2.undistortPoints(pts0, K, None)
-    pts1_norm = cv2.undistortPoints(pts1, K, None)
+    #pts0_norm = pts0#cv2.undistortPoints(pts0, K, None)
+    #pts1_norm = pts0#cv2.undistortPoints(pts1, K, None)
 
     #filter with RANSAC
-    F, mask_RANSAC = cv2.findFundamentalMat(pts0_norm, pts1_norm, cv2.FM_RANSAC, ransacReprojThreshold=1.0, confidence=0.99)
+    F, mask_RANSAC = cv2.findFundamentalMat(pts0, pts1, cv2.FM_RANSAC, ransacReprojThreshold=2.0, confidence=0.99)
 
     # Use the mask to filter inliers
     pts0_inliers = pts0[mask_RANSAC.ravel() == 1]
     pts1_inliers = pts1[mask_RANSAC.ravel() == 1]
 
-    pts0_inliers = cv2.undistortPoints(pts0_inliers, K, None) #recommeded by the CoPilot, probably not necessary
-    pts1_inliers = cv2.undistortPoints(pts1_inliers, K, None)
+    #pts0_inliers = cv2.undistortPoints(pts0_inliers, K, None) #recommeded by the CoPilot, probably not necessary
+    #pts1_inliers = cv2.undistortPoints(pts1_inliers, K, None)
 
 
     # Estimate Fundamental matrix using the 8-point algorithm
@@ -74,7 +74,7 @@ def initialization(img0, img1, K):
     points3D = points4D[:3] / points4D[3]
     # Triangulate points to reconstruct 3D landmarks
 
-    return R, t, points3D, pts_0_ex, pts_1_ex, keypoints0, keypoints1, matches, mask_RANSAC
+    return R, t, points3D, pts0_inliers, pts1_inliers, keypoints0, keypoints1, matches, mask_RANSAC
 
 def draw_matches(img0, img1, keypoints0, keypoints1, matches, mask):
     img_matches = cv2.drawMatches(img0, keypoints0, img1, keypoints1, matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)

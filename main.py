@@ -42,7 +42,7 @@ else:
     raise ValueError("Invalid dataset selection")
 
 # Bootstrap
-bootstrap_frames = [0,5]
+bootstrap_frames = [0,2]
 # need to set bootstrap_frames
 if ds == 0:
     img0 = cv2.imread(os.path.join(kitti_path, '05/image_0', 
@@ -69,9 +69,21 @@ R, t, points3D, pts0, pts1, keypoints0, keypoints1, matches, mask = initializati
 draw_matches(img0, img1, keypoints0, keypoints1, matches, mask)
 plot_3d_points(points3D)
 plot_inlier_points(img0, img1, pts0, pts1)  
-"""
+
 # Continuous operation
-for i in range(bootstrap_frames[1] + 1, last_frame + 1):
+#Do preparation:
+
+sift = cv2.SIFT_create()
+
+#Lists to track camera pose and position
+positions_list=[t]
+rotations_list=[R]
+prev_points=pts1
+all_prev_points=cv2.KeyPoint_convert(keypoints1)
+#prepare for continuous operation
+
+#for i in range(bootstrap_frames[1] + 1, last_frame + 1):
+for i in range(bootstrap_frames[1] + 1, 20): #first make it run for the first frames and extend later
     print(f'\n\nProcessing frame {i}\n=====================')
     if ds == 0:
         image = cv2.imread(os.path.join(kitti_path, '05/image_0', f'{i:06d}.png'), cv2.IMREAD_GRAYSCALE)
@@ -83,9 +95,36 @@ for i in range(bootstrap_frames[1] + 1, last_frame + 1):
         image = cv2.imread(os.path.join(parking_path, f'images/img_{i:05d}.png'), cv2.IMREAD_GRAYSCALE)
     else:
         raise ValueError("Invalid dataset selection")
-    
+    #TODO: Here we implement our code
+    cur_keypoints, _ = sift.detectAndCompute(image, None)
+    all_cur_points = cv2.KeyPoint_convert(cur_keypoints)
+
+    # Step 2: Track features using KLT
+    cur_tracked_points, status, error = cv2.calcOpticalFlowPyrLK(prev_img, image, prev_points, None)
+    cur_tracked_points = cur_tracked_points[status == 1] # points from the last image that are also in the new one
+    # filter with RANSAC
+    F, mask_RANSAC = cv2.findFundamentalMat(prev_points, cur_tracked_points, cv2.FM_RANSAC, ransacReprojThreshold=2.0, confidence=0.99)
+    cur_inliers = cur_tracked_points[mask_RANSAC.ravel() == 1]
+    prev_inliers=prev_points[mask_RANSAC.ravel() == 1]
+
+    E, mask_es = cv2.findEssentialMat(prev_inliers, cur_inliers, K, cv2.FM_8POINT)
+
+    # Recover relative camera pose
+    _, R, t, mask_pose = cv2.recoverPose(E, prev_inliers, cur_inliers, K)
+
+    print("R:", R)
+    print("t:", t)
+
+    positions_list.append(t)
+    rotations_list.append(R)
+
+    #TODO: How do we incorporate new points from the new image and  include them into the 3D points?
+
+
     # Makes sure that plots refresh.
+    #TODO: Implement the plotting functions
     cv2.waitKey(1)
     
     prev_img = image
-"""
+    prev_keypoints = cur_keypoints #includes all features to find new matches
+    prev_points=cur_tracked_points #includes only the matched features
