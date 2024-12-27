@@ -46,6 +46,8 @@ def initialization(img0, img1, K):
     #filter with RANSAC
     F, mask_RANSAC = cv2.findFundamentalMat(pts0, pts1, cv2.FM_RANSAC, ransacReprojThreshold=2.0, confidence=0.99)
 
+    E= np.transpose(np.linalg.inv(K))@F@np.linalg.inv(K)
+
     # Use the mask to filter inliers
     pts0_inliers = pts0[mask_RANSAC.ravel() == 1]
     pts1_inliers = pts1[mask_RANSAC.ravel() == 1]
@@ -55,7 +57,7 @@ def initialization(img0, img1, K):
 
 
     # Estimate Fundamental matrix using the 8-point algorithm
-    E, mask_es = cv2.findEssentialMat(pts0_inliers, pts1_inliers, K, cv2.FM_8POINT)
+    #E, mask_es = cv2.findEssentialMat(pts0_inliers, pts1_inliers, K, cv2.FM_8POINT)
 
     # Recover relative camera pose
     _, R, t, mask_pose = cv2.recoverPose(E, pts0_inliers, pts1_inliers, K)
