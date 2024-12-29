@@ -185,7 +185,8 @@ def plot_interface(image, inliers, outliers, translations, rotations, ground_tru
     ax4 = fig.add_subplot(2, 2, 4, projection='3d')  # Bottom-right (camera trajectory)
 
     inferface_plot_inliers_outliers(ax1, image, inliers, outliers)
-    interface_plot_camera_trajectory(ax4, translations, rotations, ground_truth, show_rot=False)
+    interface_plot_camera_trajectory_3d(ax4, translations, rotations, ground_truth, show_rot=False)
+    interface_plot_camera_trajectory_2d(ax2, translations, ground_truth)
     interface_plot_num_tracked_landmarks(ax3, num_tracked_landmarks_list)
 
     # Adjust layout and save the plot
@@ -201,13 +202,9 @@ def interface_plot_num_tracked_landmarks(ax, num_tracked_landmarks_list):
 
     # Generate dynamic x-values based on the length of the list
     num_points = len(num_tracked_landmarks_list)
-    x_values = list(range(-num_points, 0))  # E.g., if list has 5 elements, range becomes [-5, -4, ..., -1]
-
+    x_values = list(range(-num_points, 0))
     # Set x-ticks for every 5th point, if possible
     ticks = [x for x in x_values if x % 5 == 0]
-    if 0 not in ticks:
-        ticks.append(0)
-        ticks.sort()  # Sort the ticks to maintain order
     ax.set_xticks(ticks)
 
     # Plot the data
@@ -217,9 +214,6 @@ def interface_plot_num_tracked_landmarks(ax, num_tracked_landmarks_list):
     ax.set_xlabel("Frames")
     ax.set_ylabel("# of Tracked Landmarks")
     ax.grid(True, linestyle='--', alpha=0.5)
-
-
-
 
 
 
@@ -239,7 +233,51 @@ def inferface_plot_inliers_outliers(ax, image, inliers, outliers):
 
 
 
-def interface_plot_camera_trajectory(ax, translations, rotations, ground_truth, show_rot): # same as plot_camera_trajectory func but without saving stuff
+def interface_plot_camera_trajectory_2d(ax, translations, ground_truth):
+    """
+    Plots the trajectory of a camera in 2D space (x, y) given a list of 3D translation vectors.
+
+    Parameters:
+        translations (list of numpy arrays): A list of 3D translation vectors (shape (3,) or (3, 1)).
+        ground_truth (list of numpy arrays): A list of 3D ground truth vectors for comparison.
+    """
+    # Initialize the trajectory points
+    trajectory = []
+
+    for t in translations:
+        if t.shape == (3, 1):
+            t = t.flatten()  # Convert (3, 1) to (3,)
+        if t.shape != (3,):
+            raise ValueError("Each translation must have shape (3,) or (3, 1).")
+
+        # Append only x, y coordinates
+        trajectory.append(t[:2])  # Take the first two elements (x, y)
+
+    # Convert trajectory to numpy array for easier plotting
+    trajectory = np.array(trajectory)
+
+    # Plot the 2D trajectory
+    ax.plot(trajectory[:, 0], trajectory[:, 1], marker='o', linestyle='-', color='blue', label='Estimated Trajectory')
+
+    if ground_truth != []:
+        # Extract x, y ground truth values and plot them
+        ground_truth = np.array(ground_truth)
+        ax.plot(ground_truth[:, 0], ground_truth[:, 1], linestyle='--', color='black', label='Ground Truth')
+
+    # Add labels and title
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_title("Camera Trajectory with Landmarks")
+    ax.legend(loc='upper right', fontsize=7)
+
+    # Optional: Set equal aspect ratio for a proper spatial view
+    ax.axis('equal')
+    ax.grid(True, linestyle='--', alpha=0.5)
+
+
+
+
+def interface_plot_camera_trajectory_3d(ax, translations, rotations, ground_truth, show_rot): # same as plot_camera_trajectory func but without saving stuff
     """
     Plots the trajectory of a camera in 3D space given lists of translation vectors and rotation matrices.
 
@@ -306,10 +344,11 @@ def interface_plot_camera_trajectory(ax, translations, rotations, ground_truth, 
             size = 100 if i == 0 else 50  # First sphere is twice the size
             ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
 
-    # Set labels and title
+    ax.set_ylim3d([-20, 20])
+    ax.set_zlim3d([-5, 20])
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
     ax.set_title(f"Camera Trajectory ({'with rotations' if show_rot else 'only translations'})")
-
-    ax.axis('auto')
+    ax.legend(loc='upper right', fontsize=7)
+    ax.view_init(elev=40, azim=-45)  # Set the view angle
