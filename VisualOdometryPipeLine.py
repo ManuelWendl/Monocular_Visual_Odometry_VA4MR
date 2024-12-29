@@ -2,7 +2,7 @@ import cv2
 import numpy as np
 
 class VisualOdometryPipeLine:
-    def __init__(self,K):
+    def __init__(self, K):
         self.sift = cv2.SIFT_create()   # Simple SIFT detector
         self.K = K                      # Camera matrix
         self.R = np.eye(3)              # Rotation matrix
@@ -11,6 +11,9 @@ class VisualOdometryPipeLine:
         self.desc_last = None           # Last frame descriptors
         self.keys_last = None           # Last frame keypoints
         self.feature_ratio = 0.25       # Ratio for feature matching
+        self.inlier_pts_current = None  # Current frame inlier points (RANSAC)
+        self.outlier_pts_current = None # Current frame outlier points (RANSAC)
+        self.num_tracked_landmarks_list = [] # Number of tracked landmarks list (inliers of RANSAC) for the last 20 frames
         
 
     def initial_feature_matching(self, img0, img1):
@@ -93,6 +96,20 @@ class VisualOdometryPipeLine:
         # Filter inliers:
         inl_current = pts_current[ransac_mask.ravel() == 1]
         inl_last = pts_last[ransac_mask.ravel() == 1]
+
+        # Filter outliers:
+        outl_current = pts_current[ransac_mask.ravel() == 0]
+        outl_last = pts_last[ransac_mask.ravel() == 0]
+
+        # Update the ransac inliers and outliers from the current image for plotting purposes
+        self.inlier_pts_current = inl_current
+        self.outlier_pts_current = outl_current
+
+        if len(self.num_tracked_landmarks_list) < 20:
+            self.num_tracked_landmarks_list.append(len(self.inlier_pts_current))
+        elif len(self.num_tracked_landmarks_list) == 20:
+            self.num_tracked_landmarks_list.pop(0)
+            self.num_tracked_landmarks_list.append(len(self.inlier_pts_current))
 
         # Estimate relative camera pose of new second frame
         _, R, t,_ = cv2.recoverPose(E, inl_last, inl_current, self.K)
