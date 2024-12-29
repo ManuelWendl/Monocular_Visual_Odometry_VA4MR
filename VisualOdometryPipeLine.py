@@ -5,10 +5,12 @@ class VisualOdometryPipeLine:
     def __init__(self,K):
         self.sift = cv2.SIFT_create()   # Simple SIFT detector
         self.K = K                      # Camera matrix
+        self.R = np.eye(3)              # Rotation matrix
+        self.t = np.zeros((3, 1))       # Translation vector
         self.pts_last = None            # Last frame keypoints TODO: Look if necessary
         self.desc_last = None           # Last frame descriptors
         self.keys_last = None           # Last frame keypoints
-        self.feature_ratio = 0.2        # Ratio for feature matching
+        self.feature_ratio = 0.3        # Ratio for feature matching
         
 
     def initial_feature_matching(self, img0, img1):
@@ -23,6 +25,8 @@ class VisualOdometryPipeLine:
         # Apply ratio test
         good_matches = []
         for m,n in matches:
+            if len(good_matches) > 1000:  # Limit number of matches
+                break
             if m.distance < self.feature_ratio*n.distance:
                 good_matches.append(m)
 
@@ -47,6 +51,8 @@ class VisualOdometryPipeLine:
         # Apply ratio test
         good_matches = []
         for m,n in matches:
+            if len(good_matches) > 1000:  # Limit number of matches
+                break
             if m.distance < self.feature_ratio*n.distance:
                 good_matches.append(m)
 
@@ -65,7 +71,7 @@ class VisualOdometryPipeLine:
         pts_last, pts_current = self.initial_feature_matching(img0, img1)
 
         # Estimate Essential matrix:
-        E, ransac_mask = cv2.findEssentialMat(pts_last, pts_current, self.K, method=cv2.RANSAC, prob=0.999, threshold=0.1)
+        E, ransac_mask = cv2.findEssentialMat(pts_last, pts_current, self.K, method=cv2.RANSAC, prob=0.999, threshold=2)
 
         # Filter inliers:
         inl_current = pts_current[ransac_mask.ravel() == 1]
@@ -74,15 +80,16 @@ class VisualOdometryPipeLine:
         # Estimate relative camera pose of new second frame
         _, R, t,_ = cv2.recoverPose(E, inl_last, inl_current, self.K)
 
-        self.pts_last = pts_current
+        self.t = self.t + self.R.dot(t)
+        self.R = R.dot(self.R)
 
-        return R, t
+        self.pts_last = pts_current
     
     def continuous_operation(self, img):
         pts_last, pts_current = self.feature_matching(img)
 
         # Estimate Essential matrix:
-        E, ransac_mask = cv2.findEssentialMat(pts_last, pts_current, self.K, method=cv2.RANSAC, prob=0.999, threshold=0.1)
+        E, ransac_mask = cv2.findEssentialMat(pts_last, pts_current, self.K, method=cv2.RANSAC, prob=0.999, threshold=2)
 
         # Filter inliers:
         inl_current = pts_current[ransac_mask.ravel() == 1]
@@ -91,7 +98,8 @@ class VisualOdometryPipeLine:
         # Estimate relative camera pose of new second frame
         _, R, t,_ = cv2.recoverPose(E, inl_last, inl_current, self.K)
 
-        self.pts_last = len(inl_current)
+        self.t = self.t + self.R.dot(t)
+        self.R = R.dot(self.R)
 
-        return R, t
+        self.pts_last = len(inl_current)
     
