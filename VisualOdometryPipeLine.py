@@ -66,7 +66,6 @@ class VisualOdometryPipeLine:
 
         return pts_last, pts_current
 
-
     def initialization(self, img0, img1):
         pts_last, pts_current = self.initial_feature_matching(img0, img1)
 
