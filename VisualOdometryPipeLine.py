@@ -10,7 +10,7 @@ class VisualOdometryPipeLine:
         self.pts_last = None            # Last frame keypoints TODO: Look if necessary
         self.desc_last = None           # Last frame descriptors
         self.keys_last = None           # Last frame keypoints
-        self.feature_ratio = 0.3        # Ratio for feature matching
+        self.feature_ratio = 0.25       # Ratio for feature matching
         
 
     def initial_feature_matching(self, img0, img1):
@@ -71,7 +71,7 @@ class VisualOdometryPipeLine:
         pts_last, pts_current = self.initial_feature_matching(img0, img1)
 
         # Estimate Essential matrix:
-        E, ransac_mask = cv2.findEssentialMat(pts_last, pts_current, self.K, method=cv2.RANSAC, prob=0.999, threshold=2)
+        E, ransac_mask = cv2.findEssentialMat(pts_last, pts_current, self.K, method=cv2.RANSAC, prob=0.999, threshold=1)
 
         # Filter inliers:
         inl_current = pts_current[ransac_mask.ravel() == 1]
@@ -89,7 +89,7 @@ class VisualOdometryPipeLine:
         pts_last, pts_current = self.feature_matching(img)
 
         # Estimate Essential matrix:
-        E, ransac_mask = cv2.findEssentialMat(pts_last, pts_current, self.K, method=cv2.RANSAC, prob=0.999, threshold=2)
+        E, ransac_mask = cv2.findEssentialMat(pts_last, pts_current, self.K, method=cv2.RANSAC, prob=0.999, threshold=1)
 
         # Filter inliers:
         inl_current = pts_current[ransac_mask.ravel() == 1]

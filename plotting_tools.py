@@ -71,7 +71,7 @@ def plot_inlier_points(img0, img1, pts0_inliers, pts1_inliers):
     plt.savefig('out/inlier_points.png')
     plt.close()
 
-def plot_camera_trajectory(translations, rotations, show_rot=True):
+def plot_camera_trajectory(translations, rotations, ground_truth, show_rot=True):
     """
     Plots the trajectory of a camera in 3D space given lists of translation vectors and rotation matrices.
 
@@ -112,6 +112,11 @@ def plot_camera_trajectory(translations, rotations, show_rot=True):
     # Plot trajectory line with rainbow colors
     for i in range(num_points - 1):
         ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], trajectory[i:i+2, 2], color=colors[i])
+
+    if ground_truth != []:
+        # Plot ground truth trajectory
+        ground_truth = np.array(ground_truth)
+        ax.plot(ground_truth[:, 0], ground_truth[:, 1], np.zeros_like(ground_truth[:, 1]), color='black', label='Ground Truth')
 
     if show_rot:
         # Plot orientation at each trajectory point
