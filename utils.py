@@ -30,6 +30,7 @@ def load_data_set(ds,bootstrap_frames):
             'malaga-urban-dataset-extract-07_rectified_800x600_Images')))
         left_images = images[2::2]  # Take every second file starting from the third
         last_frame = len(left_images)
+        ground_truth = []
         K = np.array([[621.18428, 0, 404.0076],
                     [0, 621.18428, 309.05989],
                     [0, 0, 1]])
@@ -66,7 +67,7 @@ def load_data_set(ds,bootstrap_frames):
     else:
         raise ValueError("Invalid dataset selection")
 
-    return K, img0, img1,left_images
+    return K, img0, img1,left_images, ground_truth
 
 
 def load_frame(ds, i,left_images):
