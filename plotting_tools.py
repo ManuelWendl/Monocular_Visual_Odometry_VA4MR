@@ -71,13 +71,15 @@ def plot_inlier_points(img0, img1, pts0_inliers, pts1_inliers):
     plt.savefig('out/inlier_points.png')
     plt.close()
 
-def plot_camera_trajectory(translations, rotations, ground_truth, show_rot=True):
+
+def plot_camera_trajectory(translations, rotations, ground_truth,stride, show_rot=True):
     """
     Plots the trajectory of a camera in 3D space given lists of translation vectors and rotation matrices.
 
     Parameters:
         translations (list of numpy arrays): A list of 3D translation vectors (shape (3,) or (3, 1)).
         rotations (list of numpy arrays): A list of 3x3 rotation matrices (shape (3, 3)).
+        ground_truth (list of numpy arrays): A list of 3D ground truth points (optional).
         show_rot (bool): If True, plot rotations and translations. If False, plot only translations with spheres at endpoints.
     """
     if len(translations) != len(rotations):
@@ -100,6 +102,10 @@ def plot_camera_trajectory(translations, rotations, ground_truth, show_rot=True)
     # Convert trajectory to numpy array for easier plotting
     trajectory = np.array(trajectory)
 
+    # Invert the Z-axis of the computed trajectory
+    trajectory[:, 2] *= -1  # Align with ground truth
+
+
     # Generate rainbow colors based on the number of trajectory points
     num_points = len(trajectory)
     hues = np.linspace(0, 1, num_points)  # Generate hues from 0 to 1
@@ -108,15 +114,32 @@ def plot_camera_trajectory(translations, rotations, ground_truth, show_rot=True)
     # Plot the trajectory in 3D
     fig = plt.figure(figsize=(10, 7))
     ax = fig.add_subplot(111, projection='3d')
+    ax.view_init(elev=-70, azim=-90)
 
     # Plot trajectory line with rainbow colors
     for i in range(num_points - 1):
         ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], trajectory[i:i+2, 2], color=colors[i])
 
-    if ground_truth != []:
-        # Plot ground truth trajectory
-        ground_truth = np.array(ground_truth)
-        ax.plot(ground_truth[:, 0], ground_truth[:, 1], np.zeros_like(ground_truth[:, 1]), color='black', label='Ground Truth')
+    # Mark trajectory points with spheres
+    for i, (t, color) in enumerate(zip(trajectory, colors)):
+        size = 100 if i == 0 else 50  # First sphere is twice the size
+        ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
+
+    if ground_truth is not None:
+        # Add a zero y-column between x and z in ground_truth
+        ground_truth = np.insert(ground_truth, 1, 0, axis=1)
+
+        # Consider stride in ground truth
+        ground_truth = ground_truth[::stride]
+
+        # Plot ground truth trajectory as a line connecting spheres
+        for i in range(num_points - 1):
+            ax.plot(ground_truth[i:i+2, 0], ground_truth[i:i+2, 1], ground_truth[i:i+2, 2], color='black')
+
+        # Mark ground truth points with spheres
+        for i, gt in enumerate(ground_truth[:num_points]):
+            size = 200 if i == 0 else 50  # First point is marked with a large sphere
+            ax.scatter(gt[0], gt[1], gt[2], color='black', s=size, label='Ground Truth Start' if i == 0 else "")
 
     if show_rot:
         # Plot orientation at each trajectory point
@@ -136,11 +159,6 @@ def plot_camera_trajectory(translations, rotations, ground_truth, show_rot=True)
             ax.quiver(origin[0], origin[1], origin[2],
                       z_axis[0] - origin[0], z_axis[1] - origin[1], z_axis[2] - origin[2],
                       color='blue', label='Z-axis' if t is trajectory[0] else "")
-    else:
-        # Plot spheres at each translation endpoint
-        for i, (t, color) in enumerate(zip(trajectory, colors)):
-            size = 100 if i == 0 else 50  # First sphere is twice the size
-            ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
 
     # Set labels and title
     ax.set_xlabel("X")
@@ -151,8 +169,13 @@ def plot_camera_trajectory(translations, rotations, ground_truth, show_rot=True)
 
     ax.axis('equal')
 
+    plt.show()
+
     plt.savefig('out/camera_trajectory.png')
     plt.close()
+
+
+
 
 
 def plot_num_tracked_keypoints(num_tracked_keypoints_in_each_frame,stride):

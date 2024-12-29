@@ -67,6 +67,7 @@ class VisualOdometryPipeLine:
         return pts_last, pts_current
 
     def initialization(self, img0, img1):
+
         pts_last, pts_current = self.initial_feature_matching(img0, img1)
 
         # Estimate Essential matrix:
@@ -79,8 +80,8 @@ class VisualOdometryPipeLine:
         # Estimate relative camera pose of new second frame
         _, R, t,_ = cv2.recoverPose(E, inl_last, inl_current, self.K)
 
-        self.t = self.t + self.R.dot(t)
-        self.R = R.dot(self.R)
+        self.t = t
+        self.R = R
 
         self.pts_last = pts_current
     
@@ -97,8 +98,8 @@ class VisualOdometryPipeLine:
         # Estimate relative camera pose of new second frame
         _, R, t,_ = cv2.recoverPose(E, inl_last, inl_current, self.K)
 
-        self.t = self.t + self.R.dot(t)
-        self.R = R.dot(self.R)
+        self.t = self.t + self.R @ t
+        self.R = R @ self.R
 
         self.pts_last = len(inl_current)
     
