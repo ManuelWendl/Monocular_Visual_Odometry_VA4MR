@@ -7,8 +7,8 @@ from utils import load_data_set,load_frame
 
 # Setup
 ds = 0  # 0: KITTI, 1: Malaga, 2: parking
-debug = True
-num_frames_to_process = 160
+debug = False
+num_frames_to_process = 2500
 stride = 2
 bootstrap_frames = [1,1+stride]
 
@@ -25,17 +25,20 @@ print("Commencing initialisation")
 print(f'\n\nProcessing frame {bootstrap_frames[1]}\n=====================')
 
 VO = VisualOdometryPipeLine(K)
-R,t = VO.initialization(img0, img1)
+VO.initialization(img0, img1)
+
+# CONTINUOUS OPERATION 
+print("Commencing continuous operation")
 
 #for i in range(bootstrap_frames[1] + 1, last_frame + 1):
 for i in range(bootstrap_frames[1] + 1, num_frames_to_process): #first make it run for the first frames and extend later
     print(f'\n\nProcessing frame {i}\n=====================')
     image = load_frame(ds, i,malaga_left_images)
 
-    R,t = VO.continuous_operation(image)
+    VO.continuous_operation(image)
 
-    positions_list.append(t)
-    rotations_list.append(R)
+    positions_list.append(VO.t)
+    rotations_list.append(VO.R)
     num_tracked_keypoints.append(VO.pts_last)
 
     
