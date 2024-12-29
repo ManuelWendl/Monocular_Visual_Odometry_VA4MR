@@ -1,130 +1,52 @@
 import os
 import numpy as np
 import cv2
-from Initilization import initialization, draw_matches, plot_3d_points, plot_inlier_points
+from VisualOdometryPipeLine import VisualOdometryPipeLine
+from plotting_tools import plot_camera_trajectory, plot_num_tracked_keypoints
+from utils import load_data_set,load_frame
+
 # Setup
 ds = 0  # 0: KITTI, 1: Malaga, 2: parking
+debug = True
+num_frames_to_process = 160
+stride = 2
+bootstrap_frames = [1,1+stride]
 
-# Parking paths
-kitti_path = './data/kitti'
-malaga_path = './data/malaga'
-parking_path = './data/parking'
+# Tracking data
+num_tracked_keypoints = []
+positions_list = []
+rotations_list = []
 
-if ds == 0:
-    # need to set kitti_path to folder containing "05" and "poses"
-    assert 'kitti_path' in globals(), "kitti_path variable must be defined"
-    ground_truth = np.loadtxt(os.path.join(kitti_path, 'poses/05.txt'))
-    ground_truth = ground_truth[:, [-9, -1]]
-    last_frame = 4540
-    K = np.array([[7.188560000000e+02, 0, 6.071928000000e+02],
-                  [0, 7.188560000000e+02, 1.852157000000e+02],
-                  [0, 0, 1]])
-elif ds == 1:
-    # Path containing the many files of Malaga 7.
-    assert 'malaga_path' in globals(), "malaga_path variable must be defined"
-    images = sorted(os.listdir(os.path.join(malaga_path, 
-        'malaga-urban-dataset-extract-07_rectified_800x600_Images')))
-    left_images = images[2::2]  # Take every second file starting from the third
-    last_frame = len(left_images)
-    K = np.array([[621.18428, 0, 404.0076],
-                  [0, 621.18428, 309.05989],
-                  [0, 0, 1]])
-elif ds == 2:
-    # Path containing images, depths and all...
-    assert 'parking_path' in globals(), "parking_path variable must be defined"
-    last_frame = 598
-    K = np.array([[331.37, 0, 320],
-                   [0, 369.568, 240],
-                   [0,0,1]])
-    ground_truth = np.loadtxt(os.path.join(parking_path, 'poses.txt'))
-    ground_truth = ground_truth[:, [-9, -1]]
-else:
-    raise ValueError("Invalid dataset selection")
+# Load data set
+K, img0, img1, malaga_left_images = load_data_set(ds,bootstrap_frames)
 
-# Bootstrap
-bootstrap_frames = [0,2]
-# need to set bootstrap_frames
-if ds == 0:
-    img0 = cv2.imread(os.path.join(kitti_path, '05/image_0', 
-        f'{bootstrap_frames[0]:06d}.png'), cv2.IMREAD_GRAYSCALE)
-    img1 = cv2.imread(os.path.join(kitti_path, '05/image_0', 
-        f'{bootstrap_frames[1]:06d}.png'), cv2.IMREAD_GRAYSCALE)
-elif ds == 1:
-    img0 = cv2.imread(os.path.join(malaga_path, 
-        'malaga-urban-dataset-extract-07_rectified_800x600_Images', 
-        left_images[bootstrap_frames[0]]), cv2.IMREAD_GRAYSCALE)
-    img1 = cv2.imread(os.path.join(malaga_path, 
-        'malaga-urban-dataset-extract-07_rectified_800x600_Images', 
-        left_images[bootstrap_frames[1]]), cv2.IMREAD_GRAYSCALE)
-elif ds == 2:
-    img0 = cv2.imread(os.path.join(parking_path, 
-        f'images/img_{bootstrap_frames[0]:05d}.png'), cv2.IMREAD_GRAYSCALE)
-    img1 = cv2.imread(os.path.join(parking_path, 
-        f'images/img_{bootstrap_frames[1]:05d}.png'), cv2.IMREAD_GRAYSCALE)
-else:
-    raise ValueError("Invalid dataset selection")
+# INITIALIZATION 
+print("Commencing initialisation")
+print(f'\n\nProcessing frame {bootstrap_frames[1]}\n=====================')
 
-#Initialisation:
-R, t, points3D, pts0, pts1, keypoints0, keypoints1, matches, mask = initialization(img0, img1, K)
-draw_matches(img0, img1, keypoints0, keypoints1, matches, mask)
-plot_3d_points(points3D)
-plot_inlier_points(img0, img1, pts0, pts1)  
-
-# Continuous operation
-#Do preparation:
-
-sift = cv2.SIFT_create()
-
-#Lists to track camera pose and position
-positions_list=[t]
-rotations_list=[R]
-prev_points=pts1
-all_prev_points=cv2.KeyPoint_convert(keypoints1)
-#prepare for continuous operation
+VO = VisualOdometryPipeLine(K)
+R,t = VO.initialization(img0, img1)
 
 #for i in range(bootstrap_frames[1] + 1, last_frame + 1):
-for i in range(bootstrap_frames[1] + 1, 20): #first make it run for the first frames and extend later
+for i in range(bootstrap_frames[1] + 1, num_frames_to_process): #first make it run for the first frames and extend later
     print(f'\n\nProcessing frame {i}\n=====================')
-    if ds == 0:
-        image = cv2.imread(os.path.join(kitti_path, '05/image_0', f'{i:06d}.png'), cv2.IMREAD_GRAYSCALE)
-    elif ds == 1:
-        image = cv2.imread(os.path.join(malaga_path, 
-            'malaga-urban-dataset-extract-07_rectified_800x600_Images', 
-            left_images[i]), cv2.IMREAD_GRAYSCALE)
-    elif ds == 2:
-        image = cv2.imread(os.path.join(parking_path, f'images/img_{i:05d}.png'), cv2.IMREAD_GRAYSCALE)
-    else:
-        raise ValueError("Invalid dataset selection")
-    #TODO: Here we implement our code
-    cur_keypoints, _ = sift.detectAndCompute(image, None)
-    all_cur_points = cv2.KeyPoint_convert(cur_keypoints)
+    image = load_frame(ds, i,malaga_left_images)
 
-    # Step 2: Track features using KLT
-    cur_tracked_points, status, error = cv2.calcOpticalFlowPyrLK(prev_img, image, prev_points, None)
-    cur_tracked_points = cur_tracked_points[status == 1] # points from the last image that are also in the new one
-    # filter with RANSAC
-    F, mask_RANSAC = cv2.findFundamentalMat(prev_points, cur_tracked_points, cv2.FM_RANSAC, ransacReprojThreshold=2.0, confidence=0.99)
-    cur_inliers = cur_tracked_points[mask_RANSAC.ravel() == 1]
-    prev_inliers=prev_points[mask_RANSAC.ravel() == 1]
-
-    E, mask_es = cv2.findEssentialMat(prev_inliers, cur_inliers, K, cv2.FM_8POINT)
-
-    # Recover relative camera pose
-    _, R, t, mask_pose = cv2.recoverPose(E, prev_inliers, cur_inliers, K)
-
-    print("R:", R)
-    print("t:", t)
+    R,t = VO.continuous_operation(image)
 
     positions_list.append(t)
     rotations_list.append(R)
+    num_tracked_keypoints.append(VO.pts_last)
 
-    #TODO: How do we incorporate new points from the new image and  include them into the 3D points?
-
-
-    # Makes sure that plots refresh.
-    #TODO: Implement the plotting functions
-    cv2.waitKey(1)
     
-    prev_img = image
-    prev_keypoints = cur_keypoints #includes all features to find new matches
-    prev_points=cur_tracked_points #includes only the matched features
+    # Plot current camera pose
+    if debug: plot_camera_trajectory(positions_list, rotations_list,show_rot=False)
+
+print(f"VO pipeline executed over {num_frames_to_process} frames")
+
+# Plot camera trajectory
+plot_camera_trajectory(positions_list, rotations_list,show_rot=True)
+
+# Plot number of tracked keypoints
+plot_num_tracked_keypoints(num_tracked_keypoints,stride)
+
