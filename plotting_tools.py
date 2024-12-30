@@ -111,7 +111,7 @@ def plot_camera_trajectory(translations, rotations, ground_truth, landmarks, sho
 
     # Plot trajectory line with rainbow colors
     for i in range(num_points - 1):
-        ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], trajectory[i:i+2, 2], color=colors[i])
+        ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], 0*trajectory[i:i+2, 2], color=colors[i])
 
     if ground_truth != []:
         # Plot ground truth trajectory
@@ -141,11 +141,11 @@ def plot_camera_trajectory(translations, rotations, ground_truth, landmarks, sho
             ax.quiver(origin[0], origin[1], origin[2],
                       z_axis[0] - origin[0], z_axis[1] - origin[1], z_axis[2] - origin[2],
                       color='blue', label='Z-axis' if t is trajectory[0] else "")
-    else:
-        # Plot spheres at each translation endpoint
-        for i, (t, color) in enumerate(zip(trajectory, colors)):
-            size = 100 if i == 0 else 50  # First sphere is twice the size
-            ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
+    # else:
+    #     # Plot spheres at each translation endpoint
+    #     for i, (t, color) in enumerate(zip(trajectory, colors)):
+    #         size = 100 if i == 0 else 50  # First sphere is twice the size
+    #         ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
 
     # Set labels and title
     ax.set_xlabel("X")
@@ -157,6 +157,7 @@ def plot_camera_trajectory(translations, rotations, ground_truth, landmarks, sho
     ax.axis('equal')
 
     plt.savefig('out/camera_trajectory.png')
+    plt.pause(0.1)
     plt.close()
 
 
