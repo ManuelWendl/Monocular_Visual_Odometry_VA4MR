@@ -67,10 +67,10 @@ def load_data_set(ds,bootstrap_frames):
     else:
         raise ValueError("Invalid dataset selection")
 
-    return K, img0, img1,left_images, ground_truth
+    return K, img0, img1, left_images, ground_truth
 
 
-def load_frame(ds, i,left_images):
+def load_frame(ds, i, left_images):
     image = None
     
     if ds == 0:

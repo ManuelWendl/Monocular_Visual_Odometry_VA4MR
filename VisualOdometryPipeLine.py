@@ -1,10 +1,11 @@
 import cv2
 import numpy as np
+from copy import deepcopy
 
 class VisualOdometryPipeLine:
-    def __init__(self,K):
+    def __init__(self, K):
         self.sift = cv2.SIFT_create()   # Simple SIFT detector
-        self.feature_ratio = 0.8        # Ratio for feature matching
+        self.feature_ratio = 0.9        # Ratio for feature matching
         self.K = K                      # Camera matrix
         self.matcher = cv2.BFMatcher()  # Matcher for feature matching
 
@@ -60,7 +61,7 @@ class VisualOdometryPipeLine:
         proj_current = vec_current@self.K.T
         proj_current = proj_current[:,:2]/proj_current[:,2,None]
         error_current = np.linalg.norm(proj_current-pts_current.squeeze(),axis=1)
-        valid_indices = (depth_last > 0) & (depth_current > 0) & (error_current < 10) & (error_last < 10) & (dist < 500)
+        valid_indices = (depth_last > 0) & (depth_current > 0) & (dist < 100) # & (error_current < 10) & (error_last < 10)
 
         new_landmarks = new_landmarks[valid_indices]
 
@@ -71,6 +72,14 @@ class VisualOdometryPipeLine:
         self.matched_descriptor = [self.matched_descriptor[i] for i in range(len(valid_indices_descriptor)) if valid_indices_descriptor[i]]
 
         self.matched_landmarks = np.vstack((self.matched_landmarks, new_landmarks))
+        self.pts_last = None            # Last frame keypoints TODO: Look if necessary
+        self.desc_last = None           # Last frame descriptors
+        self.keys_last = None           # Last frame keypoints
+        self.feature_ratio = 0.25       # Ratio for feature matching
+        self.inlier_pts_current = None  # Current frame inlier points (RANSAC)
+        self.outlier_pts_current = None # Current frame outlier points (RANSAC)
+        self.num_tracked_landmarks_list = [] # Number of tracked landmarks list (inliers of RANSAC) for the last 20 frames
+        
 
     def initial_feature_matching(self, img0, img1):
         # Detect keypoints and compute descriptors
@@ -187,7 +196,11 @@ class VisualOdometryPipeLine:
 
                     all_inliers = np.hstack((squeezed_inliers,new_descriptors))
                     self.matched_descriptor = np.float32(self.matched_descriptor)[np.int16(all_inliers)]
+
+                    self.inlier_pts_current = pts_current_landmarks[squeezed_inliers]
+                    self.outlier_pts_current = [pts_current_landmarks for i in range(len(pts_current_landmarks)) if i not in squeezed_inliers]
                 print("SolvePnP")
+
             else:
                 sucess = False
 
@@ -196,10 +209,24 @@ class VisualOdometryPipeLine:
             # Filter inliers:
             inl_current = pts_current[ransac_mask.ravel() == 1]
             inl_last = pts_last[ransac_mask.ravel() == 1]
+            # Filter outliers:
+            outl_current = pts_current[ransac_mask.ravel() == 0]
+            outl_last = pts_last[ransac_mask.ravel() == 0]
+
+            # Update the ransac inliers and outliers from the current image for plotting purposes
+            self.inlier_pts_current = inl_current
+            self.outlier_pts_current = outl_current
+
             # Estimate relative camera pose of new second frame
             _, R, t,_ = cv2.recoverPose(E, inl_last, inl_current, self.K)
 
             inliers = inl_current
+
+        if len(self.num_tracked_landmarks_list) < 20:
+            self.num_tracked_landmarks_list.append(len(self.inlier_pts_current))
+        elif len(self.num_tracked_landmarks_list) == 20:
+            self.num_tracked_landmarks_list.pop(0)
+            self.num_tracked_landmarks_list.append(len(self.inlier_pts_current))
 
         t = self.t + self.R.dot(t)
         R = R.dot(self.R)
