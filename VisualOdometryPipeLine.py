@@ -4,7 +4,7 @@ import numpy as np
 class VisualOdometryPipeLine:
     def __init__(self,K):
         self.sift = cv2.SIFT_create()   # Simple SIFT detector
-        self.feature_ratio = 0.2       # Ratio for feature matching
+        self.feature_ratio = 0.8        # Ratio for feature matching
         self.K = K                      # Camera matrix
         self.matcher = cv2.BFMatcher()  # Matcher for feature matching
 
@@ -28,7 +28,18 @@ class VisualOdometryPipeLine:
             else:
                 bad_matches.append(m)
         return good_matches, bad_matches
-        
+    
+    def get_World_Camera_Pose(self,R,t):
+        Rnew = R.T
+        tnew = -Rnew.dot(t)
+        return Rnew, tnew
+    
+    def get_Camera_World_Pose(self,R,t):
+        T = np.vstack((np.hstack((R,t)),np.array([0,0,0,1])))
+        Tinverse = np.linalg.inv(T)
+        Rnew = Tinverse[:3,:3]
+        tnew = Tinverse[:3,3, None]
+        return Rnew, tnew
 
     def initial_feature_matching(self, img0, img1):
         # Detect keypoints and compute descriptors
@@ -72,7 +83,7 @@ class VisualOdometryPipeLine:
         pts_current_landmarks = np.float32([keypoints[m.trainIdx].pt for m in good_old_matches])
 
         # Check if there are enough matches
-        if len(good_old_matches) < 100:
+        if len(good_old_matches) < 1000:
             # Match potential features
             new_matches = self.matcher.knnMatch(np.array(self.potential_descriptor), descriptors,k=2)
 
@@ -113,7 +124,12 @@ class VisualOdometryPipeLine:
         new_t = self.t + self.R.dot(t)
         new_R = R.dot(self.R)
 
-        matched_landmarks = cv2.triangulatePoints(self.K@np.hstack((self.R, self.t)),self.K@np.hstack((new_R, new_t)), inl_last.squeeze().T, inl_current.squeeze().T).T
+        # Get transformation matrix
+        R_last, t_last = self.get_World_Camera_Pose(self.R,self.t)
+        R_current, t_current = self.get_World_Camera_Pose(new_R,new_t)
+
+        # Triangulate new points
+        matched_landmarks = cv2.triangulatePoints(self.K@np.hstack((R_last,t_last)),self.K@np.hstack((R_current, t_current)), inl_last.squeeze().T, inl_current.squeeze().T).T
         self.matched_landmarks = matched_landmarks[:, :3] / matched_landmarks[:, 3, None]
 
         # Disambiguate landmarks
@@ -131,18 +147,29 @@ class VisualOdometryPipeLine:
         self.num_pts = len(inl_current)
     
     def continuous_operation(self, img):
+
         pts_current_landmarks, pts_last, pts_current = self.feature_matching(img)
 
         sucess = False
 
-        if len(pts_current_landmarks) >= 50:
-            sucess, R, t, inliers = cv2.solvePnPRansac(self.matched_landmarks, pts_current_landmarks, self.K, np.zeros(4), flags=cv2.SOLVEPNP_ITERATIVE, confidence=0.999 ,reprojectionError=2)
+        if len(pts_current_landmarks) >= 10:
+            sucess, R, t, inliers = cv2.solvePnPRansac(self.matched_landmarks, pts_current_landmarks, self.K, None, flags=cv2.SOLVEPNP_EPNP, confidence=0.9999 ,reprojectionError=1)
             R, _ = cv2.Rodrigues(R)
+
+            R, t = self.get_Camera_World_Pose(R,t)
 
             if sucess and len(inliers) > 4:
                 # Filter only inliers
-                # self.matched_landmarks = self.matched_landmarks[np.int16(inliers.squeeze())]
-                # self.matched_descriptor = np.float32(self.matched_descriptor)[np.int16(inliers.squeeze())]
+
+                filter = True
+                if filter:
+                    squeezed_inliers = inliers.squeeze()
+                    new_descriptors = np.arange(len(self.matched_landmarks),len(self.matched_descriptor))
+
+                    self.matched_landmarks = self.matched_landmarks[np.int16(squeezed_inliers)]
+
+                    all_inliers = np.hstack((squeezed_inliers,new_descriptors))
+                    self.matched_descriptor = np.float32(self.matched_descriptor)[np.int16(all_inliers)]
                 print("SolvePnP")
 
         if not sucess:
@@ -159,30 +186,41 @@ class VisualOdometryPipeLine:
             inliers = inl_current
 
         if pts_current != []:
+            # Get transformation matrix
+            R_current, t_current = self.get_World_Camera_Pose(R,t)
+            R_last, t_last = self.get_World_Camera_Pose(self.R,self.t)
+
             # Triangulate new points
-            new_landmarks = cv2.triangulatePoints(self.K@np.hstack((self.R, self.t)), self.K@np.hstack((R, t)), pts_last.squeeze().T, pts_current.squeeze().T).T
+            new_landmarks = cv2.triangulatePoints(self.K@np.hstack((R_last, t_last)), self.K@np.hstack((R_current, t_current)), pts_last.squeeze().T, pts_current.squeeze().T).T
             new_landmarks = new_landmarks[:, :3] / new_landmarks[:, 3, None]
-            self.matched_landmarks = np.vstack((self.matched_landmarks, new_landmarks))
 
             # Disambiguate landmarks
-            vec_last = (self.R @ self.matched_landmarks.T + self.t).T
-            vec_current = (R @ self.matched_landmarks.T + t).T
+            vec_last = (R_last @ new_landmarks.T + t_last).T
+            vec_current = (R_current @ new_landmarks.T + t_current).T
             depth_last = vec_last[:, 2]
             depth_current = vec_current[:, 2]
-            angle1_last = np.arctan2(vec_last[:, 1], vec_last[:, 0])
-            angle1_current = np.arctan2(vec_current[:, 1], vec_current[:, 0])
-            angle2_last = np.arctan2(vec_last[:, 2], vec_last[:, 0])
-            angle2_current = np.arctan2(vec_current[:, 2], vec_current[:, 0])
-            angle3_last = np.arctan2(vec_last[:, 1], vec_last[:, 2])
-            angle3_current = np.arctan2(vec_current[:, 1], vec_current[:, 2])
-            diff_angle1 = np.abs(angle1_last - angle1_current)
-            diff_angle2 = np.abs(angle2_last - angle2_current)
-            diff_angle3 = np.abs(angle3_last - angle3_current)
-            dist = np.linalg.norm(vec_current - vec_last, axis=1)
-            valid_indices = (depth_last > 0) & (depth_current > 0) & (diff_angle1 < 0.1) & (diff_angle2 < 0.1) & (diff_angle3 < 0.1) & (dist > 0.1) & (dist < 10)
 
-            self.matched_landmarks = self.matched_landmarks[valid_indices]
-            self.matched_descriptor = [self.matched_descriptor[i] for i in range(len(valid_indices)) if valid_indices[i]]
+            # Distance landmarks to camera
+            dist = np.linalg.norm(new_landmarks - t_current.T, axis=1)
+
+            # Filter with reprojection error
+            proj_last = vec_last@self.K.T
+            proj_last = proj_last[:,:2]/proj_last[:,2,None]
+            error_last = np.linalg.norm(proj_last-pts_last.squeeze(),axis=1)
+            proj_current = vec_current@self.K.T
+            proj_current = proj_current[:,:2]/proj_current[:,2,None]
+            error_current = np.linalg.norm(proj_current-pts_current.squeeze(),axis=1)
+
+            valid_indices = (depth_last > 0) & (depth_current > 0) & (error_current < 1) & (error_last < 1) & (dist < 100)
+
+            new_landmarks = new_landmarks[valid_indices]
+
+            valid_indices_descriptor = np.hstack((np.ones((len(self.matched_landmarks),),dtype=bool),valid_indices))
+            self.matched_descriptor = [self.matched_descriptor[i] for i in range(len(valid_indices_descriptor)) if valid_indices_descriptor[i]]
+
+
+            self.matched_landmarks = np.vstack((self.matched_landmarks, new_landmarks))
+
 
         self.R = R
         self.t = t
