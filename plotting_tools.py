@@ -229,9 +229,15 @@ def inferface_plot_inliers_outliers(ax, image, inliers, outliers):
         ax.set_title('Current image with no RANSAC inliers and outliers')
         return
     if isinstance(inliers, np.ndarray):
-        inliers = inliers.squeeze().tolist()
+        if inliers.ndim == 1:
+            inliers = inliers.reshape(1, -1)
+        else:
+            inliers = inliers.squeeze().tolist()
     if isinstance(outliers, np.ndarray):
-        outliers = outliers.squeeze().tolist()
+        if outliers.ndim == 1:
+            outliers = outliers.reshape(1, -1)
+        else:
+            outliers = outliers.squeeze().tolist()
     for inlier in inliers:
         # Flatten to 1D list
         ax.scatter(inlier[0], inlier[1], c='green', s=40, marker='x')

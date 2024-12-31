@@ -5,7 +5,7 @@ from copy import deepcopy
 class VisualOdometryPipeLine:
     def __init__(self, K):
         self.sift = cv2.SIFT_create()   # Simple SIFT detector
-        self.feature_ratio = 0.5        # Ratio for feature matching
+        self.feature_ratio = 0.25       # Ratio for feature matching
         self.K = K                      # Camera matrix
         self.matcher = cv2.BFMatcher()  # Matcher for feature matching
 
@@ -66,7 +66,7 @@ class VisualOdometryPipeLine:
         proj_current = proj_current[:,:2]/proj_current[:,2,None]
         error_current = np.linalg.norm(proj_current-pts_current.squeeze(),axis=1)
         if sucess:
-            valid_indices = (dist > 1) & (dist < 100) 
+            valid_indices = (dist > 1) & (dist < 1000) 
         else:
             valid_indices = (depth_last > 0) & (depth_current > 0)
 
@@ -148,6 +148,32 @@ class VisualOdometryPipeLine:
         return pts_current_landmarks, pts_last, pts_current
 
     def initialization(self, img0, img1):
+
+        def find_rotation_to_x_axis(t):
+            t_norm = np.linalg.norm(t)
+            t_hat = t / t_norm
+            t_hat = t_hat.squeeze()
+
+            x_axis = np.float64([0, 1, 0])
+            v = np.cross(t_hat, x_axis)
+            v_norm = np.linalg.norm(v)
+
+            if v_norm > 1e-6:
+                v = v / v_norm
+                cos_theta = np.dot(t_hat, x_axis)
+                theta = np.arccos(cos_theta)
+
+                # Skew-symmetric matrix
+                vx = np.array([[0, -v[2], v[1]],
+                               [v[2], 0, -v[0]],
+                               [-v[1], v[0], 0]])
+                R = np.eye(3) + np.sin(theta) * vx + (1 - np.cos(theta)) * (vx @ vx)
+            else:
+                R = np.eye(3)  # Already aligned or opposite direction
+
+            return R, np.array([[0],[t_norm], [0]])
+        
+
         pts_last, pts_current = self.initial_feature_matching(img0, img1)
 
         # Estimate Essential matrix:
@@ -159,10 +185,10 @@ class VisualOdometryPipeLine:
         self.matched_descriptor = [self.matched_descriptor[i] for i in range(len(ransac_mask)) if ransac_mask[i] == 1]
 
         # Estimate relative camera pose of new second frame
-        _, R, t,_ = cv2.recoverPose(E, inl_current, inl_current)
+        num_inliers, R, t,_ = cv2.recoverPose(E, inl_current, inl_current)
 
         # Result of first transformation is not up to scale! I heuristicillay scaled it for parking not good!!
-        t *= -.25
+        # R, t = find_rotation_to_x_axis(t)
 
         new_t = self.t + self.R.dot(t)
         new_R = R.dot(self.R)
@@ -187,7 +213,7 @@ class VisualOdometryPipeLine:
 
             R, t = self.get_World_Camera_Pose(R,t)
 
-            if sucess and len(inliers) >= 50:
+            if sucess and len(inliers) >= 4:
                 # Filter only inliers
 
                 squeezed_inliers = inliers.squeeze()
