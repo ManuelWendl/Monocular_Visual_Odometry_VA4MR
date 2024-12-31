@@ -111,7 +111,7 @@ def plot_camera_trajectory(translations, rotations, ground_truth, landmarks, sho
 
     # Plot trajectory line with rainbow colors
     for i in range(num_points - 1):
-        ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], 0*trajectory[i:i+2, 2], color=colors[i])
+        ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], trajectory[i:i+2, 2], color=colors[i])
 
     if ground_truth != []:
         # Plot ground truth trajectory
@@ -228,14 +228,16 @@ def inferface_plot_inliers_outliers(ax, image, inliers, outliers):
     if inliers is None or inliers == []:
         ax.set_title('Current image with no RANSAC inliers and outliers')
         return
+    if isinstance(inliers, np.ndarray):
+        inliers = inliers.squeeze().tolist()
+    if isinstance(outliers, np.ndarray):
+        outliers = outliers.squeeze().tolist()
     for inlier in inliers:
         # Flatten to 1D list
-        flattened_inlier = [item for sublist in inlier for item in sublist]
-        ax.scatter(flattened_inlier[0], flattened_inlier[1], c='green', s=40, marker='x')
+        ax.scatter(inlier[0], inlier[1], c='green', s=40, marker='x')
     for outlier in outliers:
         # Flatten to 1D list
-        flattened_outlier = [item for sublist in outlier for item in sublist]
-        ax.scatter(flattened_outlier[0], flattened_outlier[1], c='red', s=40, marker='x')
+        ax.scatter(outlier[0], outlier[1], c='red', s=40, marker='x')
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_title('Current image with RANSAC inliers and outliers')

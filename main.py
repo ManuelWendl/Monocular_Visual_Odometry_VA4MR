@@ -7,7 +7,7 @@ from utils import load_data_set,load_frame
 
 # Setup
 ds = 2  # 0: KITTI, 1: Malaga, 2: parking
-debug = True
+debug = False
 interface_plot = True
 num_frames_to_process = 589 # 2761 (Kitti) 
 stride = 2 if ds == 1 else 1  # Stride for frame processing
@@ -41,7 +41,7 @@ for i in range(bootstrap_frames[1] + 1, num_frames_to_process): #first make it r
 
     positions_list.append(VO.t)
     rotations_list.append(VO.R)
-    num_tracked_keypoints.append(VO.pts_last)
+    num_tracked_keypoints.append(VO.num_pts)
 
     if debug: plot_camera_trajectory(positions_list, rotations_list,ground_truth, VO.matched_landmarks, show_rot=False)
 
