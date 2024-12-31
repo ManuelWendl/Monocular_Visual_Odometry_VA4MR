@@ -6,7 +6,7 @@ from plotting_tools import plot_camera_trajectory, plot_num_tracked_keypoints, i
 from utils import load_data_set,load_frame
 
 # Setup
-ds = 0  # 0: KITTI, 1: Malaga, 2: parking
+ds = 2  # 0: KITTI, 1: Malaga, 2: parking
 debug = True
 interface_plot = True
 num_frames_to_process = 200 # 2761 (Kitti) 
@@ -39,8 +39,8 @@ for i in range(bootstrap_frames[1] + 1, num_frames_to_process): #first make it r
 
     VO.continuous_operation(image)
 
-    positions_list.append(VO.t)
-    rotations_list.append(VO.R)
+    positions_list.append(VO.t_CW)
+    rotations_list.append(VO.R_CW)
     num_tracked_keypoints.append(VO.num_pts)
 
     if debug: plot_camera_trajectory(positions_list, rotations_list,ground_truth, VO.matched_landmarks, show_rot=False)

@@ -5,12 +5,12 @@ from copy import deepcopy
 class VisualOdometryPipeLine:
     def __init__(self, K):
         self.sift = cv2.SIFT_create()   # Simple SIFT detector
-        self.feature_ratio = 0.25       # Ratio for feature matching
+        self.feature_ratio = 0.9       # Ratio for feature matching
         self.K = K                      # Camera matrix
         self.matcher = cv2.BFMatcher()  # Matcher for feature matching
 
-        self.R = np.eye(3)              # Rotation matrix
-        self.t = np.zeros((3, 1))       # Translation vector
+        self.R_CW = np.eye(3)              # Rotation matrix
+        self.t_CW = np.zeros((3, 1))       # Translation vector
         self.num_pts = 0                # Number of tracked points
 
         self.matched_descriptor = []    # List to store matched descriptors
@@ -39,46 +39,33 @@ class VisualOdometryPipeLine:
         tnew = -Rnew.dot(t)
         return Rnew, tnew
     
-    def get_new_landmarks(self,pts_last, pts_current, R, t, sucess=False):
+    def get_new_landmarks(self,pts_last, pts_current, R_current_WC, t_current_WC):
         # Get transformation matrix
-        R_current, t_current = self.get_World_Camera_Pose(R,t)
-        R_last, t_last = self.get_World_Camera_Pose(self.R,self.t)
+        R_last_WC, t_last_WC = self.get_World_Camera_Pose(self.R_CW,self.t_CW)
 
         # Triangulate new points
-        new_landmarks = cv2.triangulatePoints(self.K@np.hstack((R_last, t_last)), self.K@np.hstack((R_current, t_current)), pts_last.squeeze().T, pts_current.squeeze().T).T
-        new_landmarks = new_landmarks[:, :3] / new_landmarks[:, 3, None]
-
-        # Disambiguate landmarks in front of camera
-        vec_last = (R_last @ new_landmarks.T + t_last).T
-
-        vec_current = (R_current @ new_landmarks.T + t_current).T
-        depth_last = vec_last[:, 2]
-        depth_current = vec_current[:, 2]
+        new_landmarks = cv2.triangulatePoints(self.K@np.hstack((R_last_WC, t_last_WC)), self.K@np.hstack((R_current_WC, t_current_WC)), pts_last.squeeze().T, pts_current.squeeze().T).T
+        new_landmarks_W = new_landmarks[:, :3] / new_landmarks[:, 3, None] # Landmarks in world frame
 
         # Distance landmarks to camera
-        dist = np.linalg.norm((R_current @ new_landmarks.T + t_current).T, axis=1)
+        R_current_CW = R_current_WC.T
+        t_current_CW = -R_current_CW @ t_current_WC
 
-        # Filter with reprojection error
-        proj_last = vec_last@self.K.T
-        proj_last = proj_last[:,:2]/proj_last[:,2,None]
-        error_last = np.linalg.norm(proj_last-pts_last.squeeze(),axis=1)
-        proj_current = vec_current@self.K.T
-        proj_current = proj_current[:,:2]/proj_current[:,2,None]
-        error_current = np.linalg.norm(proj_current-pts_current.squeeze(),axis=1)
-        if sucess:
-            valid_indices = (dist > 1) & (dist < 1000) 
-        else:
-            valid_indices = (depth_last > 0) & (depth_current > 0)
+        dist = np.linalg.norm((R_current_CW @ new_landmarks_W.T + t_current_CW).T, axis=1)
 
-        new_landmarks = new_landmarks[valid_indices]
+        new_landmarks_current_C = (R_current_CW @ new_landmarks_W.T + t_current_CW).T
+        new_landmarks_last_C = (self.R_CW @ new_landmarks_W.T + self.t_CW).T
+        z_current_C = new_landmarks_current_C[:,2]
+        z_last_C = new_landmarks_last_C[:,2]
 
-        # convert to world coordinates
-        new_landmarks = (R_current @ new_landmarks.T + t_current).T
+        valid_indices = (dist > 0) & (dist < 100) & (z_current_C > 0) & (z_last_C > 0)
+        
+        new_landmarks_W = new_landmarks_W[valid_indices]
 
         valid_indices_descriptor = np.hstack((np.ones((len(self.matched_landmarks),),dtype=bool),valid_indices))
         self.matched_descriptor = [self.matched_descriptor[i] for i in range(len(valid_indices_descriptor)) if valid_indices_descriptor[i]]
 
-        self.matched_landmarks = np.vstack((self.matched_landmarks, new_landmarks))
+        self.matched_landmarks = np.vstack((self.matched_landmarks, new_landmarks_W))
         
 
     def initial_feature_matching(self, img0, img1):
@@ -149,35 +136,10 @@ class VisualOdometryPipeLine:
 
     def initialization(self, img0, img1):
 
-        def find_rotation_to_x_axis(t):
-            t_norm = np.linalg.norm(t)
-            t_hat = t / t_norm
-            t_hat = t_hat.squeeze()
-
-            x_axis = np.float64([0, 1, 0])
-            v = np.cross(t_hat, x_axis)
-            v_norm = np.linalg.norm(v)
-
-            if v_norm > 1e-6:
-                v = v / v_norm
-                cos_theta = np.dot(t_hat, x_axis)
-                theta = np.arccos(cos_theta)
-
-                # Skew-symmetric matrix
-                vx = np.array([[0, -v[2], v[1]],
-                               [v[2], 0, -v[0]],
-                               [-v[1], v[0], 0]])
-                R = np.eye(3) + np.sin(theta) * vx + (1 - np.cos(theta)) * (vx @ vx)
-            else:
-                R = np.eye(3)  # Already aligned or opposite direction
-
-            return R, np.array([[0],[t_norm], [0]])
-        
-
         pts_last, pts_current = self.initial_feature_matching(img0, img1)
 
         # Estimate Essential matrix:
-        E, ransac_mask = cv2.findEssentialMat(pts_last, pts_current, self.K, method=cv2.RANSAC, prob=0.999, threshold=1)
+        E, ransac_mask = cv2.findEssentialMat(pts_last.squeeze(), pts_current.squeeze(), self.K, method=cv2.RANSAC, prob=0.999, threshold=1)
 
         # Filter inliers:
         inl_current = pts_current[ransac_mask.ravel() == 1]
@@ -185,19 +147,16 @@ class VisualOdometryPipeLine:
         self.matched_descriptor = [self.matched_descriptor[i] for i in range(len(ransac_mask)) if ransac_mask[i] == 1]
 
         # Estimate relative camera pose of new second frame
-        num_inliers, R, t,_ = cv2.recoverPose(E, inl_current, inl_current)
+        num_inliers, R_WC, t_WC,_ = cv2.recoverPose(E, inl_last, inl_current)
 
-        # Result of first transformation is not up to scale! I heuristicillay scaled it for parking not good!!
-        # R, t = find_rotation_to_x_axis(t)
-
-        new_t = self.t + self.R.dot(t)
-        new_R = R.dot(self.R)
+        R_CW = R_WC.T
+        t_CW = -R_CW @ t_WC
 
         self.matched_landmarks = np.array([]).reshape(0,3)
-        self.get_new_landmarks(inl_last, inl_current, new_R, new_t)
+        self.get_new_landmarks(inl_last, inl_current, R_WC, t_WC)
 
-        self.R = new_R
-        self.t = new_t
+        self.R_CW = R_CW
+        self.t_CW = t_CW
 
         self.num_pts = len(inl_current)
     
@@ -208,14 +167,11 @@ class VisualOdometryPipeLine:
         sucess = False
 
         if len(pts_current_landmarks) >= 50:
-            sucess, R, t, inliers = cv2.solvePnPRansac(self.matched_landmarks, pts_current_landmarks, self.K, np.zeros(0), flags=cv2.SOLVEPNP_ITERATIVE, confidence=0.999 ,reprojectionError=1)
-            R, _ = cv2.Rodrigues(R)
-
-            R, t = self.get_World_Camera_Pose(R,t)
+            sucess, R_CW, t_CW, inliers = cv2.solvePnPRansac(self.matched_landmarks, pts_current_landmarks, self.K, np.zeros(0), flags=cv2.SOLVEPNP_ITERATIVE, confidence=0.999 ,reprojectionError=1)
+            R_CW, _ = cv2.Rodrigues(R_CW)
 
             if sucess and len(inliers) >= 4:
                 # Filter only inliers
-
                 squeezed_inliers = inliers.squeeze()
 
                 filter = True
@@ -235,22 +191,7 @@ class VisualOdometryPipeLine:
                 sucess = False
 
         if not sucess:
-            E, ransac_mask = cv2.findEssentialMat(pts_last, pts_current, self.K, method=cv2.RANSAC, prob=0.999, threshold=1)
-            # Filter inliers:
-            inl_current = pts_current[ransac_mask.ravel() == 1]
-            inl_last = pts_last[ransac_mask.ravel() == 1]
-            # Filter outliers:
-            outl_current = pts_current[ransac_mask.ravel() == 0]
-            outl_last = pts_last[ransac_mask.ravel() == 0]
-
-            # Update the ransac inliers and outliers from the current image for plotting purposes
-            self.inlier_pts_current = inl_current
-            self.outlier_pts_current = outl_current
-
-            # Estimate relative camera pose of new second frame
-            _, R, t,_ = cv2.recoverPose(E, inl_last, inl_current, self.K)
-
-            inliers = inl_current
+            raise Exception("PnP Failed")
 
         if len(self.num_tracked_landmarks_list) < 20:
             self.num_tracked_landmarks_list.append(len(self.inlier_pts_current))
@@ -258,22 +199,15 @@ class VisualOdometryPipeLine:
             self.num_tracked_landmarks_list.pop(0)
             self.num_tracked_landmarks_list.append(len(self.inlier_pts_current))
 
-        t = self.t + self.R.dot(t)
-        R = R.dot(self.R)
-
         # Project landmarks into new camera frame
-        R_inv_last = self.R.T
-        t_inv_last = -R_inv_last.dot(self.t)
-        self.matched_landmarks = R_inv_last.dot(self.matched_landmarks.T - t_inv_last).T
-        self.matched_landmarks = (R.dot(self.matched_landmarks.T) + t).T
+        R_WC, t_WC = self.get_World_Camera_Pose(R_CW, t_CW)
 
         if pts_current != []:
-            self.get_new_landmarks(pts_last, pts_current, R, t, sucess)
+            self.get_new_landmarks(pts_last, pts_current, R_WC, t_WC)
 
-        self.R = R.T
-        self.t = t
-        # self.t = self.t + self.R.dot(t)
-        # self.R = R.dot(self.R)
+        self.R_CW = R_CW
+        self.t_CW = t_CW
+
         if inliers is not None:
             self.num_pts = len(inliers)
         else:
