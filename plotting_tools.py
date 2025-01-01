@@ -141,11 +141,11 @@ def plot_camera_trajectory(translations, rotations, ground_truth, landmarks, sho
             ax.quiver(origin[0], origin[1], origin[2],
                       z_axis[0] - origin[0], z_axis[1] - origin[1], z_axis[2] - origin[2],
                       color='blue', label='Z-axis' if t is trajectory[0] else "")
-    # else:
-    #     # Plot spheres at each translation endpoint
-    #     for i, (t, color) in enumerate(zip(trajectory, colors)):
-    #         size = 100 if i == 0 else 50  # First sphere is twice the size
-    #         ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
+    else:
+        # Plot spheres at each translation endpoint
+        for i, (t, color) in enumerate(zip(trajectory, colors)):
+            size = 100 if i == 0 else 50  # First sphere is twice the size
+            ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
 
     # Set labels and title
     ax.set_xlabel("X")
@@ -156,9 +156,9 @@ def plot_camera_trajectory(translations, rotations, ground_truth, landmarks, sho
 
     ax.axis('auto')
 
-    plt.xlim(-20, 20)
-    plt.ylim(-20, 20)
-    ax.set_zlim(-5, 10)
+    plt.xlim(-100, 100)
+    plt.ylim(-100, 100)
+    ax.set_zlim(-5, 100)
 
     plt.savefig('out/camera_trajectory.png')
     plt.pause(0.1)
@@ -242,12 +242,22 @@ def inferface_plot_inliers_outliers(ax, image, inliers, outliers):
             outliers = outliers.reshape(1, -1)
         else:
             outliers = outliers.squeeze().tolist()
+
     for inlier in inliers:
         # Flatten to 1D list
-        ax.scatter(inlier[0], inlier[1], c='green', s=40, marker='x')
-    for outlier in outliers:
-        # Flatten to 1D list
-        ax.scatter(outlier[0], outlier[1], c='red', s=40, marker='x')
+        ax.scatter(inlier[0], inlier[1], c='green', s=40, marker='x') 
+
+    if outliers == []:
+        print("No outliers")
+    else:
+        if isinstance(outliers[0], float):
+            ax.scatter(outliers[0], outliers[1], c='red', s=40, marker='x')
+        else:
+            for outlier in outliers:
+                # Flatten to 1D list
+                ax.scatter(outlier[0], outlier[1], c='red', s=40, marker='x')
+    
+    
     ax.set_xticks([])
     ax.set_yticks([])
     ax.set_title('Current image with RANSAC inliers and outliers')
