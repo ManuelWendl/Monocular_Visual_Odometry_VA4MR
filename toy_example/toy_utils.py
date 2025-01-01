@@ -25,7 +25,7 @@ def intrinsic_matrix(focal_length, cx, cy):
         [focal_length, 0, cx],
         [0, focal_length, cy],
         [0, 0, 1]
-    ])
+    ],np.float32)
 
 def project_points(points_3d, P):
     points_2d = (P @ np.hstack((points_3d, np.ones((points_3d.shape[0], 1)))).T).T

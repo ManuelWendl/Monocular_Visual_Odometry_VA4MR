@@ -1,7 +1,15 @@
 {
     "configurations": [
+        
 
-
+        {
+            "type": "debugpy",
+            "request": "launch",
+            "name": "debug toy_example.py",
+            "program": "${workspaceFolder}/toy_example/toy_example.py",
+            "console": "integratedTerminal",
+            "envFile": "${workspaceFolder}/.env"
+        },
         {
             "type": "debugpy",
             "request": "launch",

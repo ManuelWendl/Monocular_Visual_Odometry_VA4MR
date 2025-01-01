@@ -80,38 +80,20 @@ for i in range(num_iterations):
     if not within_bounds:
         print(f"Warning: Some points are out of bounds in iteration {i + 1}.")
 
-    # Find essential matrix
-    #  Filter with RANSAC
-    F, mask_RANSAC = cv2.findFundamentalMat(points_2d_last, points_2d_current, cv2.FM_RANSAC, ransacReprojThreshold=1.0, confidence=0.99)
+    # Use Pnp to estimate the camera pose --> Conclusion: solvePnPRansac returns "world to current camera frame"
+    sucess, R_est_C_W, t_est_W_C, inliers = cv2.solvePnPRansac(points_3d, points_2d_current, K, np.zeros(4), flags=cv2.SOLVEPNP_ITERATIVE, confidence=0.999 ,reprojectionError=2)
+    R_est_C_W, _ = cv2.Rodrigues(R_est_C_W)
+    
 
-    # Use the mask to filter inliers
-    pts0_inliers = points_2d_last[mask_RANSAC.ravel() == 1]
-    pts1_inliers = points_2d_current[mask_RANSAC.ravel() == 1]
-
-    E, mask = cv2.findEssentialMat(pts0_inliers, pts1_inliers, K, method=cv2.FM_8POINT)
-
-    # Recover pose
-    _, R_est_C_Clast, t_est_Clast_C, mask_pose = cv2.recoverPose(E, pts0_inliers, pts1_inliers, K)
-
-    # T_C_Clast = np.zeros((4, 4))
-    # T_C_Clast[:3, :3] = R_est_Clast_C
-    # T_C_Clast[:3, 3] = t_est_C_Clast.flatten()
-    # T_C_Clast[3, 3] = 1
-
-    # T_Clast_C = np.linalg.inv(T_C_Clast)
-    # R_est_C_Clast = T_Clast_C[:3, :3]
-    # t_est_Clast_C = T_Clast_C[:3, 3].reshape(-1, 1)
-
-
-    print("t_est_Clast_C",t_est_Clast_C)
+    print("t_est_W_C",t_est_W_C)
     
     # Estimate trajectory (relative to the initial pose)
     if i == 0:
-        R_est_CW_accum = R_est_C_Clast
-        t_est_WC_accum = t_est_Clast_C
+        R_est_CW_accum = R_est_C_W
+        t_est_WC_accum = t_est_W_C
     else:
-        R_est_CW_accum = R_est_C_Clast @ R_est_CW_accum
-        t_est_WC_accum = R_est_C_Clast @ t_est_WC_accum + t_est_Clast_C
+        R_est_CW_accum = R_est_C_W
+        t_est_WC_accum = t_est_W_C
 
     camera_positions_est.append(t_est_WC_accum.flatten())
     camera_orientation_est.append(R_est_CW_accum)
