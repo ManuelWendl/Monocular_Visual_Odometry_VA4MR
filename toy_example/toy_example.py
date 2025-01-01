@@ -80,7 +80,7 @@ for i in range(num_iterations):
     if not within_bounds:
         print(f"Warning: Some points are out of bounds in iteration {i + 1}.")
 
-    # Use Pnp to estimate the camera pose --> Conclusion: solvePnPRansac returns "world to current camera frame"
+    # Use Pnp to estimate the camera pose --> Conclusion: solvePnPRansac returns "3dp to current camera frame"
     sucess, R_est_C_W, t_est_W_C, inliers = cv2.solvePnPRansac(points_3d, points_2d_current, K, np.zeros(4), flags=cv2.SOLVEPNP_ITERATIVE, confidence=0.999 ,reprojectionError=2)
     R_est_C_W, _ = cv2.Rodrigues(R_est_C_W)
     
