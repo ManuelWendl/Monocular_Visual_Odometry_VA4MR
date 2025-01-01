@@ -158,8 +158,10 @@ class VisualOdometryPipeLine:
 
             inliers = inl_current
 
-        if pts_current != []:
+        if pts_current is not None:
             # Triangulate new points
+            pts_last = np.array(pts_last)
+            pts_current = np.array(pts_current)  
             new_landmarks = cv2.triangulatePoints(self.K@np.hstack((self.R, self.t)), self.K@np.hstack((R, t)), pts_last.squeeze().T, pts_current.squeeze().T).T
             new_landmarks = new_landmarks[:, :3] / new_landmarks[:, 3, None]
             self.matched_landmarks = np.vstack((self.matched_landmarks, new_landmarks))

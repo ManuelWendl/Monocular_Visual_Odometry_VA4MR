@@ -71,7 +71,220 @@ def plot_inlier_points(img0, img1, pts0_inliers, pts1_inliers):
     plt.savefig('out/inlier_points.png')
     plt.close()
 
-def plot_camera_trajectory(translations, rotations, ground_truth, show_rot=True):
+def plot_camera_trajectory(translations, rotations, ground_truth,stride,show_gt=False):
+    """
+    Plots the trajectory of a camera in 3D space given lists of translation vectors and rotation matrices.
+
+    Parameters:
+        translations (list of numpy arrays): A list of 3D translation vectors (shape (3,) or (3, 1)).
+        rotations (list of numpy arrays): A list of 3x3 rotation matrices (shape (3, 3)).
+        ground_truth (list of numpy arrays): A list of 3D ground truth points (optional).
+        show_rot (bool): If True, plot rotations and translations. If False, plot only translations with spheres at endpoints.
+    """
+    if len(translations) != len(rotations):
+        raise ValueError("The number of translations and rotations must be the same.")
+
+    # Initialize lists for the trajectory points
+    trajectory = []
+    camera_axes = []  # For visualizing camera orientations
+
+    for t, R in zip(translations, rotations):
+        if t.shape == (3, 1):
+            t = t.flatten()  # Convert (3, 1) to (3,)
+        if t.shape != (3,) or R.shape != (3, 3):
+            raise ValueError("Each translation must have shape (3,) or (3, 1) and each rotation must have shape (3, 3).")
+
+        # Store trajectory points and orientation axes
+        trajectory.append(t)
+        camera_axes.append(R)
+
+    # Convert trajectory to numpy array for easier plotting
+    trajectory = np.array(trajectory)
+
+    # Invert the Z-axis of the computed trajectory
+    trajectory[:, 2] *= -1  # Align with ground truth
+
+
+    # Generate rainbow colors based on the number of trajectory points
+    num_points = len(trajectory)
+    hues = np.linspace(0, 1, num_points)  # Generate hues from 0 to 1
+    colors = [hsv_to_rgb((hue, 1, 1)) for hue in hues]
+
+    # Plot the trajectory in 3D
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.view_init(elev=-70, azim=-90)
+
+    # Plot trajectory line with rainbow colors
+    for i in range(num_points - 1):
+        ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], trajectory[i:i+2, 2], color=colors[i])
+
+    # Mark trajectory points with spheres
+    for i, (t, color) in enumerate(zip(trajectory, colors)):
+        size = 100 if i == 0 else 50  # First sphere is twice the size
+        ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
+
+    if ground_truth is not None and show_gt:
+        # Add a zero y-column between x and z in ground_truth
+        ground_truth = np.insert(ground_truth, 1, 0, axis=1)
+
+        # Consider stride in ground truth
+        ground_truth = ground_truth[::stride]
+
+        # Plot ground truth trajectory as a line connecting spheres
+        for i in range(num_points - 1):
+            ax.plot(ground_truth[i:i+2, 0], ground_truth[i:i+2, 1], ground_truth[i:i+2, 2], color='black')
+
+        # Mark ground truth points with spheres
+        for i, gt in enumerate(ground_truth[:num_points]):
+            size = 200 if i == 0 else 50  # First point is marked with a large sphere
+            ax.scatter(gt[0], gt[1], gt[2], color='black', s=size, label='Ground Truth Start' if i == 0 else "")
+
+    # Set labels and title
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_zlabel("Z")
+    ax.set_title(f"Camera Trajectory)")
+    #ax.legend()
+
+    ax.axis('equal')
+
+    plt.show()
+
+    plt.savefig('out/camera_trajectory.png')
+    plt.close()
+
+
+
+def plot_num_tracked_keypoints(num_tracked_keypoints_in_each_frame,stride):
+
+    time_steps = np.arange(len(num_tracked_keypoints_in_each_frame))*stride
+
+    # Plot the numbers over time steps
+    plt.figure(figsize=(8, 5))
+    plt.plot(time_steps, num_tracked_keypoints_in_each_frame, marker='o', linestyle='-', color='b', label='Data')
+
+    # Add labels and title
+    plt.xlabel('Time Step')
+    plt.ylabel('Value')
+    plt.title('Number of Tracked Keypoints Over all VO iterations')
+    plt.grid(True)
+    #plt.legend()
+
+    # Show the plot
+    plt.savefig('out/num_tracked_keypoints.png')
+    plt.close()
+
+### PLOTS FOR THE INTERFACE ###
+def plot_interface(image, inliers, outliers, translations, rotations, ground_truth, num_tracked_landmarks_list):
+    fig = plt.figure(figsize=(10, 6))
+
+    # Add subplots to the figure
+    ax1 = fig.add_subplot(2, 2, 1)  # Top-left (inliers outliers)
+    ax2 = fig.add_subplot(2, 2, 2)  # Top-right (trajectory of last 20 frames and landmarks)
+    ax3 = fig.add_subplot(2, 2, 3)  # Bottom-left (num of tracked landmarks of 20 last frames)
+    ax4 = fig.add_subplot(2, 2, 4, projection='3d')  # Bottom-right (camera trajectory)
+
+    inferface_plot_inliers_outliers(ax1, image, inliers, outliers)
+    interface_plot_camera_trajectory_3d(ax4, translations, rotations, ground_truth, show_rot=False)
+    interface_plot_camera_trajectory_2d(ax2, translations, ground_truth)
+    interface_plot_num_tracked_landmarks(ax3, num_tracked_landmarks_list)
+
+    # Adjust layout and save the plot
+    plt.tight_layout()
+    #plt.savefig('out/interface_plot.png')  # Save the plot to a file
+    plt.show()
+    plt.close()  # Close the figure to avoid display in interactive environments
+
+
+
+def interface_plot_num_tracked_landmarks(ax, num_tracked_landmarks_list):
+    ax.set_title('# of tracked landmarks over the last 20 frames')
+    ax.set_ylim([0, 200])  # Set y-axis range
+
+    # Generate dynamic x-values based on the length of the list
+    num_points = len(num_tracked_landmarks_list)
+    x_values = list(range(-num_points, 0))
+    # Set x-ticks for every 5th point, if possible
+    ticks = [x for x in x_values if x % 5 == 0]
+    ax.set_xticks(ticks)
+
+    # Plot the data
+    ax.plot(x_values, num_tracked_landmarks_list, marker='o', linestyle='-', color='b')
+
+    # Optional: Add labels and grid
+    ax.set_xlabel("Frames")
+    ax.set_ylabel("# of Tracked Landmarks")
+    ax.grid(True, linestyle='--', alpha=0.5)
+
+
+
+def inferface_plot_inliers_outliers(ax, image, inliers, outliers):
+    ax.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    if inliers is None or len(inliers) == 0:    
+        ax.set_title('Current image with no RANSAC inliers and outliers')
+        return
+    if isinstance(inliers, np.ndarray):
+        inliers = inliers.squeeze().tolist()
+    if isinstance(outliers, np.ndarray):
+        outliers = outliers.squeeze().tolist()
+    for inlier in inliers:
+        # Flatten to 1D list
+        ax.scatter(inlier[0], inlier[1], c='green', s=40, marker='x')
+    for outlier in outliers:
+        # Flatten to 1D list
+        ax.scatter(outlier[0], outlier[1], c='red', s=40, marker='x')
+    ax.set_xticks([])
+    ax.set_yticks([])
+    ax.set_title('Current image with RANSAC inliers and outliers')
+
+
+
+def interface_plot_camera_trajectory_2d(ax, translations, ground_truth):
+    """
+    Plots the trajectory of a camera in 2D space (x, y) given a list of 3D translation vectors.
+
+    Parameters:
+        translations (list of numpy arrays): A list of 3D translation vectors (shape (3,) or (3, 1)).
+        ground_truth (list of numpy arrays): A list of 3D ground truth vectors for comparison.
+    """
+    # Initialize the trajectory points
+    trajectory = []
+
+    for t in translations:
+        if t.shape == (3, 1):
+            t = t.flatten()  # Convert (3, 1) to (3,)
+        if t.shape != (3,):
+            raise ValueError("Each translation must have shape (3,) or (3, 1).")
+
+        # Append only x, y coordinates
+        trajectory.append(t[:2])  # Take the first two elements (x, y)
+
+    # Convert trajectory to numpy array for easier plotting
+    trajectory = np.array(trajectory)
+
+    # Plot the 2D trajectory
+    ax.plot(trajectory[:, 0], trajectory[:, 1], marker='o', linestyle='-', color='blue', label='Estimated Trajectory')
+
+    if len(ground_truth) > 0:
+        # Extract x, y ground truth values and plot them
+        ground_truth = np.array(ground_truth)
+        ax.plot(ground_truth[:, 0], ground_truth[:, 1], linestyle='--', color='black', label='Ground Truth')
+
+    # Add labels and title
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.set_title("Camera Trajectory with Landmarks")
+    ax.legend(loc='upper right', fontsize=7)
+
+    # Optional: Set equal aspect ratio for a proper spatial view
+    ax.axis('equal')
+    ax.grid(True, linestyle='--', alpha=0.5)
+
+
+
+
+def interface_plot_camera_trajectory_3d(ax, translations, rotations, ground_truth, show_rot): # same as plot_camera_trajectory func but without saving stuff
     """
     Plots the trajectory of a camera in 3D space given lists of translation vectors and rotation matrices.
 
@@ -105,15 +318,11 @@ def plot_camera_trajectory(translations, rotations, ground_truth, show_rot=True)
     hues = np.linspace(0, 1, num_points)  # Generate hues from 0 to 1
     colors = [hsv_to_rgb((hue, 1, 1)) for hue in hues]
 
-    # Plot the trajectory in 3D
-    fig = plt.figure(figsize=(10, 7))
-    ax = fig.add_subplot(111, projection='3d')
-
     # Plot trajectory line with rainbow colors
     for i in range(num_points - 1):
         ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], trajectory[i:i+2, 2], color=colors[i])
 
-    if ground_truth != []:
+    if len(ground_truth) > 0:
         # Plot ground truth trajectory
         ground_truth = np.array(ground_truth)
         ax.plot(ground_truth[:, 0], ground_truth[:, 1], np.zeros_like(ground_truth[:, 1]), color='black', label='Ground Truth')
@@ -142,35 +351,11 @@ def plot_camera_trajectory(translations, rotations, ground_truth, show_rot=True)
             size = 100 if i == 0 else 50  # First sphere is twice the size
             ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
 
-    # Set labels and title
+    ax.set_ylim3d([-20, 20])
+    ax.set_zlim3d([-5, 20])
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
     ax.set_title(f"Camera Trajectory ({'with rotations' if show_rot else 'only translations'})")
-    #ax.legend()
-
-    ax.axis('equal')
-
-    plt.savefig('out/camera_trajectory.png')
-    plt.close()
-
-
-def plot_num_tracked_keypoints(num_tracked_keypoints_in_each_frame,stride):
-
-    time_steps = np.arange(len(num_tracked_keypoints_in_each_frame))*stride
-
-    # Plot the numbers over time steps
-    plt.figure(figsize=(8, 5))
-    plt.plot(time_steps, num_tracked_keypoints_in_each_frame, marker='o', linestyle='-', color='b', label='Data')
-
-    # Add labels and title
-    plt.xlabel('Time Step')
-    plt.ylabel('Value')
-    plt.title('Number of Tracked Keypoints Over all VO iterations')
-    plt.grid(True)
-    #plt.legend()
-
-    # Show the plot
-    plt.savefig('out/num_tracked_keypoints.png')
-    plt.close()
-
+    ax.legend(loc='upper right', fontsize=7)
+    ax.view_init(elev=40, azim=-45)  # Set the view angle
