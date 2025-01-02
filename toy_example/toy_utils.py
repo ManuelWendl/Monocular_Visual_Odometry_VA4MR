@@ -2,8 +2,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 
+def plot_stats(num_valid_3d_pts):
+    plt.figure()
+    plt.plot(num_valid_3d_pts)
+    plt.xlabel("Iteration")
+    plt.ylabel("Number of Valid 3D Points")
+    plt.title("Number of Valid 3D Points vs Iteration")
+    plt.grid()
+    plt.show()
+
 def move_camera(t_gt_WC,R_gt_CW):
-    xy_var = 0.01
+    xy_var = 0.05
     t_gt_Clast_C = np.array([
         [np.random.uniform(-xy_var, xy_var)],  # x translation
         [0],                                     # fixed y translation

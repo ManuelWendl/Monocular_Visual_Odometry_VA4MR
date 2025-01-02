@@ -2,19 +2,22 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from toy_utils import generate_3d_points, intrinsic_matrix, project_points, \
-    plot_trajectory, get_viz_img,plot_trajectory_and_image,move_camera,get_trans_img
+    plot_trajectory, get_viz_img,plot_trajectory_and_image,move_camera,get_trans_img,plot_stats
 
 # Step 1: Define 3D points in the initial camera (world) frame
-num_3d_pts = 25
+num_3d_pts = 10**2
 xy_var = 0.7
-z_base = 4
+z_base = 5
 z_range = (-0.25, 0.25)
 points_3D_W = generate_3d_points(num_3d_pts, xy_var, z_base, z_range) # 3xN
-
+points_3D_W_triangulated_last = points_3D_W.copy()
 # Step 2: Define the intrinsic camera matri x (realistic values for a camera)
 focal_length = 800
 cx, cy = 320, 240
 K = intrinsic_matrix(focal_length, cx, cy)
+
+# Stats
+num_valid_3d_pts = []
 
 # Step 3: Define initial extrinsics (identity for initial pose)
 R1 = np.eye(3)
@@ -30,7 +33,7 @@ image1 = np.zeros((480, 640), dtype=np.uint8)
 prev_image = get_viz_img(points_2d_last, title="Initial Image")
 
 # Iterative camera movement and rotation
-num_iterations = 10
+num_iterations = 20
 t_gt_WC = np.zeros((3, 1))
 R_gt_CW = np.eye(3)
 
@@ -52,10 +55,17 @@ for i in range(num_iterations):
     # Project points to the image
     points_2d_current = project_points(points_3D_W, P)
     curr_image = get_viz_img(points_2d_current, title=f"Iteration {i + 1} Image")
+    # if i == 30:
+    #     cv2.imshow("image",curr_image)
+    #     cv2.waitKey(0)
     
     # Use Pnp to estimate the camera pose --> Conclusion: solvePnPRansac returns "3dp to current camera frame"
     sucess, R_est_CW, t_est_W_C, inliers = cv2.solvePnPRansac(points_3D_W.T, points_2d_current.T, K, np.zeros(4), flags=cv2.SOLVEPNP_ITERATIVE, confidence=0.999 ,reprojectionError=2)
     R_est_CW, _ = cv2.Rodrigues(R_est_CW)
+
+    #points_3D_W = points_3D_W[:, inliers.flatten()]
+    #points_2d_current = points_2d_current[:, inliers.flatten()]
+    
 
 
     # Triangulate points
@@ -69,25 +79,27 @@ for i in range(num_iterations):
         points_3D_triangulated_Clast = cv2.triangulatePoints(P0, P1, points_2d_last, points_2d_current)
         points_3D_triangulated_Clast /= points_3D_triangulated_Clast[3, :]
         points_3D_triangulated_Clast = points_3D_triangulated_Clast[:3, :].reshape(3, -1)
+        points_3D_triangulated_W = R_est_W_Clast @ points_3D_triangulated_Clast + t_est_W_Clast
+
 
         # Filter out points behind the camera
         max_depth = points_3D_triangulated_Clast[2, :].mean()
         z_mask = (0 < points_3D_triangulated_Clast[2, :]) & (points_3D_triangulated_Clast[2, :] < max_depth)
-        points_3D_triangulated_Clast_invalid = points_3D_triangulated_Clast[:, ~z_mask]
-        points_3D_triangulated_Clast = points_3D_triangulated_Clast[:, z_mask]
+
+        # Filter out points which are too far away from their previous position
+        d_mask = np.linalg.norm(points_3D_W_triangulated_last - points_3D_triangulated_W, axis=0) < 0.3
+        num_valid_3d_pts.append(np.sum(d_mask))
+
+        final_mask = z_mask & d_mask
+
+        points_3D_triangulated_Clast_invalid = points_3D_triangulated_Clast[:, ~final_mask]
+        points_3D_triangulated_Clast = points_3D_triangulated_Clast[:, final_mask]
+        
 
         # Transform the triangulated points to the world frame
-        points_3D_triangulated_W = R_est_W_Clast @ points_3D_triangulated_Clast + t_est_W_Clast
         points_3D_triangulated_W_invalid = R_est_W_Clast @ points_3D_triangulated_Clast_invalid + t_est_W_Clast
+        points_3D_triangulated_W = R_est_W_Clast @ points_3D_triangulated_Clast + t_est_W_Clast
         
-        #distances = np.linalg.norm(points_3D_triangulated_W.T - points_3d, axis=0)
-        #print("Mean triangulation error:", np.mean(distances))
-
-        trans_error = np.linalg.norm(t_gt_WC - t_est_W_C)
-        print("Translation error:", trans_error)
-        rot_error = cv2.Rodrigues(R_gt_CW @ R_est_CW.T)[0].sum()
-        print("Rotation error:", np.degrees(rot_error))
-
             
     # Estimate trajectory (relative to the initial pose)
     if i == 0:
@@ -102,15 +114,19 @@ for i in range(num_iterations):
 
     #plot_trajectory_and_image(camera_positions_gt, camera_positions_est, points_3d,prev_image, image, i + 1)
     if i > 0:
-        plot_trajectory_and_image(camera_positions_gt, camera_positions_est,camera_orientations_gt,\
-                                   camera_orientation_est, points_3D_W,points_3D_triangulated_W, \
-                                    points_3D_triangulated_W_invalid, trans_img)
+        pass
+        # plot_trajectory_and_image(camera_positions_gt, camera_positions_est,camera_orientations_gt,\
+        #                            camera_orientation_est, points_3D_W,points_3D_triangulated_W, \
+        #                             points_3D_triangulated_W_invalid, trans_img)
+        # #plot_stats(num_valid_3d_pts)
         
     #visualize_image(image, title=f"Iteration {i + 1} Image")
 
     # Update vars
     points_2d_last = points_2d_current
     prev_image = curr_image 
+
+    points_3D_W_triangulated_last = points_3D_W
 
     camera_positions_gt.append(t_gt_WC.flatten())
     camera_orientations_gt.append(R_gt_CW)
@@ -123,5 +139,5 @@ for i in range(num_iterations):
 
 plot_trajectory_and_image(camera_positions_gt, camera_positions_est,camera_orientations_gt,\
                                    camera_orientation_est, points_3D_W,points_3D_triangulated_W, \
-                                    points_3D_triangulated_W_invalid, trans_img)
-        
+                                    points_3D_triangulated_W_invalid, trans_img,show_invalid=True)
+plot_stats(num_valid_3d_pts)
