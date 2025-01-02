@@ -2,6 +2,28 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 
+def move_camera(t_gt_WC,R_gt_CW):
+    xy_var = 0.01
+    t_gt_Clast_C = np.array([
+        [np.random.uniform(-xy_var, xy_var)],  # x translation
+        [0],                                     # fixed y translation
+        [0.1]                            # fixed z translation
+    ])
+    #print("t_gt_Clast_C",t_gt_Clast_C)
+    t_gt_WC += t_gt_Clast_C
+
+    # Rotate the camera around the y-axis
+    angle = np.radians(np.random.uniform(-5, 5))
+    R_y = np.array([
+        [np.cos(angle), 0, np.sin(angle)],
+        [0, 1, 0],
+        [-np.sin(angle), 0, np.cos(angle)]
+    ])
+    R_gt_CW = R_y @ R_gt_CW
+    return R_gt_CW, t_gt_WC
+
+
+
 def generate_3d_points(num_3d_pts, xy_var, z_base, z_range):
     z_values = z_base + np.random.uniform(*z_range, num_3d_pts)
     grid_size = int(np.ceil(np.sqrt(num_3d_pts)))
@@ -18,7 +40,7 @@ def generate_3d_points(num_3d_pts, xy_var, z_base, z_range):
     y_flat += np.random.uniform(-0.05, 0.05, num_3d_pts)  # Perturb y
 
     points_3d = np.column_stack((x_flat, y_flat, z_values))
-    return points_3d
+    return points_3d.T
 
 def intrinsic_matrix(focal_length, cx, cy):
     return np.array([
@@ -28,11 +50,14 @@ def intrinsic_matrix(focal_length, cx, cy):
     ],np.float32)
 
 def project_points(points_3d, P):
-    points_2d = (P @ np.hstack((points_3d, np.ones((points_3d.shape[0], 1)))).T).T
-    points_2d = points_2d / points_2d[:, 2][:, np.newaxis]
-    return points_2d[:, :2]
+    points_2D = P @ np.vstack((points_3d, np.ones((1, points_3d.shape[1]))))
+    # Normalize homogeneous coordinates
+    points_2D /= points_2D[2, :]
+    return points_2D[:2]
 
-def plot_trajectory_and_image(camera_positions_gt, camera_positions_est, camera_orientations_gt, camera_orientation_est, points_3d, image):
+
+def plot_trajectory_and_image(camera_positions_gt, camera_positions_est, camera_orientations_gt, \
+                              camera_orientation_est, points_3d_gt,points_3d_triang,points_3d_triang_invalid, image,show_invalid=False):
     camera_positions_gt = np.array(camera_positions_gt)
     camera_positions_est = np.array(camera_positions_est)
 
@@ -42,8 +67,12 @@ def plot_trajectory_and_image(camera_positions_gt, camera_positions_est, camera_
     ax = axes[0]
     ax.plot(camera_positions_gt[:, 0], camera_positions_gt[:, 2], marker='o', label="GT Trajectory")
     ax.plot(camera_positions_est[:, 0], camera_positions_est[:, 2], marker='x', label="Estimated Trajectory")
+    ax.scatter(points_3d_gt[0, :], points_3d_gt[2,:], color='blue', marker='x', label="GT 3D Points")
+    ax.scatter(points_3d_triang[0,:], points_3d_triang[2,:], color='green',marker='x', label="Triangulated 3D Points valid")
+    if show_invalid: ax.scatter(points_3d_triang_invalid[0,:], points_3d_triang_invalid[2,:], color='red',marker='x', label="Triangulated 3D Points invalid")
 
-    # # Plot orientations for Estimated
+
+    # Plot orientations for Estimated
     # arrow_length_scalar = 0.3
     # for pos, orient in zip(camera_positions_est[1:], camera_orientation_est[1:]):
     #     ax.quiver(pos[0], pos[2], arrow_length_scalar*orient[0, 0], arrow_length_scalar*orient[2, 0], color='magenta', scale=5)
@@ -82,6 +111,7 @@ def plot_trajectory(camera_positions_gt, camera_positions_est,camera_orientation
     # Plot trajectories
     ax.plot(camera_positions_gt[:, 0], camera_positions_gt[:, 2], marker='o', label="GT Trajectory")
     ax.plot(camera_positions_est[:, 0], camera_positions_est[:, 2], marker='x', label="Estimated Trajectory")
+
     #ax.scatter(points_3d[:, 0], points_3d[:, 2], color='green', label="3D Points")
 
     # Plot orientations for Estimated
@@ -105,9 +135,26 @@ def plot_trajectory(camera_positions_gt, camera_positions_est,camera_orientation
     fig.set_size_inches(16, 16)
     plt.show()
 
-def visualize_image(image, title="Image"):
-    plt.figure()
-    plt.imshow(image, cmap='gray')
-    plt.axis('off')
-    plt.title(title)
-    plt.show()
+def get_viz_img(points, title="Image",show=False):
+    image = np.zeros((480, 640), dtype=np.uint8)
+
+    for pt in points.astype(int).T:
+        cv2.circle(image, tuple(pt), radius=3, color=255, thickness=-1)
+    if show:
+        plt.figure()
+        plt.imshow(image, cmap='gray')
+        plt.axis('off')
+        plt.title(title)
+        plt.show()
+    return image
+
+def get_trans_img(pts_last,pts_current):
+    image = np.zeros((480, 640), dtype=np.uint8)
+    for j in range(pts_last.shape[1]):
+        pt = pts_current[:,j]
+        ptl = pts_last[:,j]
+        cv2.circle(image, tuple(ptl.astype(int)), radius=1, color=255, thickness=-1)
+        cv2.circle(image, tuple(pt.astype(int)), radius=3, color=255, thickness=-1)
+        cv2.line(image, tuple(ptl.astype(int)), tuple(pt.astype(int)), color=255, thickness=1)
+    return image
+
