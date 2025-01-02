@@ -70,10 +70,10 @@ class VisualOdometryPipeLine:
             cos = np.sum(vec_current.T*vec_last.T, axis=1) / (np.linalg.norm(vec_current, axis=0) * np.linalg.norm(vec_last, axis=0))
             cos = np.clip(cos, -1.0, 1.0)
             alphas = np.degrees(np.arccos(cos))
-            return alphas > self.options['min_baseline_angle']
+            return alphas < self.options['min_baseline_angle']
         
         # Filter keypoints with small baseline
-        mask = check_baseline(self.potential_keys[:,0], self.potential_keys[:,1], self.potential_first_keys[:,0], self.potential_first_keys[:,1])
+        too_short_baseline = check_baseline(self.potential_keys[:,0], self.potential_keys[:,1], self.potential_first_keys[:,0], self.potential_first_keys[:,1])
 
         def disambguate_landmark(R_current_CW, t_current_CW, R_last_CW, t_last_CW, landmark):
             dist = np.linalg.norm(R_current_CW @ landmark + t_current_CW)
@@ -82,12 +82,12 @@ class VisualOdometryPipeLine:
             return z_current_C[2] > 0 and z_last_C[2] > 0 and dist > self.options['min_dist_landmarks'] and dist < self.options['max_dist_landmarks']
 
         for i in range(self.potential_keys.shape[0]):
-            if mask[i]:
+            if too_short_baseline[i]:
                 continue
 
             # Get transform of first keypoint from transform list
             R_past_CW, t_past_CW = self.transforms[int(self.potential_transforms[i])]
-            R_past_WC, t_past_WC = self.get_World_Camera_Pose(R_past_CW, t_past_CW)
+
             # Triangulate points
             new_landmark = cv2.triangulatePoints(
                 self.K@np.hstack((R_past_CW, t_past_CW)),
@@ -96,10 +96,8 @@ class VisualOdometryPipeLine:
                 self.potential_keys[i].reshape(-1, 1)
             )
             new_landmark = new_landmark[:3] / new_landmark[3]
-
-            R_current_WC, t_current_WC = self.get_World_Camera_Pose(R_current_CW, t_current_CW)
             
-            if disambguate_landmark(R_current_WC, t_current_WC, R_past_WC, t_past_WC, new_landmark):
+            if True: #disambguate_landmark(R_current_CW, t_current_CW, R_past_CW, t_past_CW, new_landmark):
                 if self.matched_landmarks == []:
                     self.matched_landmarks = new_landmark.T
                     self.matched_keypoints = self.potential_keys[i].reshape(1,2)
@@ -109,7 +107,7 @@ class VisualOdometryPipeLine:
                     self.matched_keypoints = np.append(self.matched_keypoints, self.potential_keys[i].reshape(1,2), axis=0)
                     self.matched_descriptors = np.append(self.matched_descriptors, self.potential_descriptors[i].reshape(1,-1), axis=0)
 
-        self.filter_potential(mask)
+        self.filter_potential(too_short_baseline)
         
     def feature_matching(self, img0, img1):
 
@@ -148,8 +146,8 @@ class VisualOdometryPipeLine:
 
         # Store potential features for next image
         if self.potentail_frame is None:
-            self.potential_keys = pts0
-            self.potential_first_keys = pts1
+            self.potential_keys = pts1
+            self.potential_first_keys = pts0
             self.potential_descriptors = np.float32([descriptors1[m.trainIdx] for m in good_matches])
             self.potential_transforms = np.ones((len(pts1), 1)) * (len(self.transforms)-1)  
         else:

@@ -157,9 +157,9 @@ def plot_camera_trajectory(translations, rotations, ground_truth, landmarks, sho
 
     ax.axis('auto')
 
-    plt.xlim(-100, 100)
-    plt.ylim(-100, 100)
-    ax.set_zlim(-5, 100)
+    plt.xlim(-50,50)
+    plt.ylim(-50, 50)
+    ax.set_zlim(-50, 50)
 
     plt.savefig('out/camera_trajectory.png')
     plt.pause(0.1)

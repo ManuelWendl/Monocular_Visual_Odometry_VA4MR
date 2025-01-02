@@ -52,14 +52,8 @@ for i in range(bootstrap_frames[1] + 1, num_frames_to_process): #first make it r
     R = VO.transforms[-1][0]
     t = VO.transforms[-1][1]
 
-    h = np.zeros(4)
-    h[3] = 1
-
-    T = np.vstack((np.hstack((R, t)), [0, 0, 0, 1]))
-    pos = (np.linalg.inv(T) @ h)[0:3]
-
-    positions_list.append(pos)
-    rotations_list.append(VO.transforms[-1][0])
+    positions_list.append(t)
+    rotations_list.append(R)
     num_tracked_keypoints.append(VO.num_pts[-1])
 
     if debug: plot_camera_trajectory(positions_list, rotations_list,ground_truth, VO.matched_landmarks, show_rot=False)
