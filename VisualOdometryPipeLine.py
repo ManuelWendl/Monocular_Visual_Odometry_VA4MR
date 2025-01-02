@@ -1,6 +1,8 @@
 import cv2
 import numpy as np
 from copy import deepcopy
+from plotting_tools import reprojection_error_plot
+
 
 class VisualOdometryPipeLine:
     def __init__(self, K, options):
@@ -30,6 +32,12 @@ class VisualOdometryPipeLine:
         self.outlier_pts_current = None             # Current frame outlier points (RANSAC)
         self.num_tracked_landmarks_list = []        # Number of tracked landmarks list (inliers of RANSAC) for the last 20 frames
 
+        # for plotting of the reprojection error
+        self.repr_error_plot = True                # Set to True to plot the reprojection error
+        self.repr_error_mean = []
+        self.repr_error_std = []
+        self.repr_error_max = []
+        self.repr_error_below_threshold = []
     
     def get_World_Camera_Pose(self,R,t):
         Rnew = R.T
@@ -194,14 +202,35 @@ class VisualOdometryPipeLine:
 
         self.feature_tracking(img)
 
-        sucess = False
+        success = False
 
         if len(self.matched_keypoints) >= 8:
-            sucess, R_CW, t_CW, inliers = cv2.solvePnPRansac(self.matched_landmarks, self.matched_keypoints, self.K, np.zeros(0), flags=cv2.SOLVEPNP_ITERATIVE, confidence=self.options['PnP_conf'] ,reprojectionError=self.options['PnP_error'])
+            success, R_CW, t_CW, inliers = cv2.solvePnPRansac(self.matched_landmarks, self.matched_keypoints, self.K, np.zeros(0), flags=cv2.SOLVEPNP_ITERATIVE, confidence=self.options['PnP_conf'] ,reprojectionError=self.options['PnP_error'])
 
             R_CW, _ = cv2.Rodrigues(R_CW)
             
-            if sucess:
+            if success:
+                if self.repr_error_plot:
+                    inlier_indices = inliers.squeeze()  # Indices of inliers from PnP
+                    # Calculate reprojection error for inliers
+                    reprojected_points, _ = cv2.projectPoints(self.matched_landmarks[inlier_indices], R_CW, t_CW, self.K, None)
+                    reprojection_error = np.linalg.norm(self.matched_keypoints[inlier_indices] - reprojected_points.squeeze(axis=1), axis=1)
+
+                    mean_error = np.mean(reprojection_error)
+                    std_error = np.std(reprojection_error)
+                    max_error = np.max(reprojection_error)
+                    below_threshold = np.sum(reprojection_error < 1.0) / len(reprojection_error) * 100
+
+                    self.repr_error_mean.append(mean_error)
+                    self.repr_error_std.append(std_error)
+                    self.repr_error_max.append(max_error)
+                    self.repr_error_below_threshold.append(below_threshold)
+                    print(f"Reprojection Error (Mean): {mean_error:.2f} pixels")
+                    print(f"Reprojection Error (Std Dev): {std_error:.2f} pixels")
+                    print(f"Reprojection Error (Max): {max_error:.2f} pixels")
+                    print(f"Percentage Below 1 Pixel: {below_threshold:.2f}%")
+                    reprojection_error_plot(self, self.repr_error_mean, self.repr_error_std, self.repr_error_max, self.repr_error_below_threshold)
+
                 mask = np.isin(np.arange(len(self.matched_landmarks)), inliers.squeeze()).astype(np.bool)
 
                 # Store outliers for plots
@@ -210,7 +239,7 @@ class VisualOdometryPipeLine:
 
                 self.filter_landmarks(mask)
 
-        if not sucess:
+        if not success:
             raise Exception("PnP Failed")
 
         if len(self.num_tracked_landmarks_list) < 20:

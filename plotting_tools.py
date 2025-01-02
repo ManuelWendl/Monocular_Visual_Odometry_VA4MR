@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from matplotlib.colors import hsv_to_rgb
+from scipy.interpolate import make_interp_spline
 
 
 def draw_matches(img0, img1, keypoints0, keypoints1, matches, mask):
@@ -383,3 +384,42 @@ def interface_plot_camera_trajectory_3d(ax, translations, rotations, ground_trut
     ax.set_title(f"Camera Trajectory ({'with rotations' if show_rot else 'only translations'})")
     ax.legend(loc='upper right', fontsize=7)
     ax.view_init(elev=40, azim=-45)  # Set the view angle
+
+
+def reprojection_error_plot(self, mean_error, std_error, max_error, below_threshold):
+
+    # Create the first plot: Mean, Std Dev, and Max Error
+    plt.figure(figsize=(10, 6))
+    plt.plot(mean_error, label="Mean Error", marker="o")
+    plt.plot(std_error, label="Std Dev", marker="s")
+    plt.plot(max_error, label="Max Error", marker="^")
+    plt.title(f"Reprojection Errors")
+    plt.xlabel("Frame")
+    plt.ylabel("Reprojection Error (pixels)")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"out/reprojection_error.png")
+    plt.close()
+
+    # Create the second plot: Percentage Below 1 Pixel
+    plt.figure(figsize=(10, 6))
+    plt.plot(below_threshold, label="% Below 1 Pixel", marker="o", color="green")
+
+    # Fit a spline to the percentage data
+    if len (below_threshold) > 5:
+        x = np.arange(len(below_threshold))
+        y = np.array(below_threshold)
+        spline = make_interp_spline(x, y, k=3)  # k=3 for cubic spline
+        x_smooth = np.linspace(x.min(), x.max(), 15)
+        y_smooth = spline(x_smooth)
+        plt.plot(x_smooth, y_smooth, label="Trend", color="blue", linestyle="--")
+
+
+    plt.title(f"Percentage of Points Below 1 Pixel Reprojection Error")
+    plt.xlabel("Frame")
+    plt.ylabel("Percentage (%)")
+    plt.ylim(0, 100)
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(f"out/percentage_below_1.png")
+    plt.close()
