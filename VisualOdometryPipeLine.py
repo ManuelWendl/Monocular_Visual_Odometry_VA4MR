@@ -98,7 +98,7 @@ class VisualOdometryPipeLine:
             new_landmark = new_landmark[:3] / new_landmark[3]
             
             if True: #disambguate_landmark(R_current_CW, t_current_CW, R_past_CW, t_past_CW, new_landmark):
-                if self.matched_landmarks == []:
+                if len(self.matched_landmarks) == 0:
                     self.matched_landmarks = new_landmark.T
                     self.matched_keypoints = self.potential_keys[i].reshape(1,2)
                     self.matched_descriptors = self.potential_descriptors[i].reshape(1,-1)

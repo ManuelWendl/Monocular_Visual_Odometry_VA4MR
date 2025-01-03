@@ -114,12 +114,12 @@ def plot_camera_trajectory(translations, rotations, ground_truth, landmarks, sho
     for i in range(num_points - 1):
         ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], trajectory[i:i+2, 2], color=colors[i])
 
-    if ground_truth != []:
+    if len(ground_truth) > 0:
         # Plot ground truth trajectory
         ground_truth = np.array(ground_truth)
         ax.plot(ground_truth[:, 0], ground_truth[:, 1], np.zeros_like(ground_truth[:, 1]), color='black', label='Ground Truth')
 
-    if landmarks != []:
+    if len(landmarks) > 0:
         # Plot landmarks
         landmarks = np.array(landmarks)
         ax.scatter(landmarks[:, 0], landmarks[:, 1], landmarks[:, 2], color='orange', s=10, label='Landmarks')
@@ -230,7 +230,7 @@ def interface_plot_num_tracked_landmarks(ax, num_tracked_landmarks_list):
 
 def inferface_plot_inliers_outliers(ax, image, inliers, outliers):
     ax.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    if inliers is None or inliers == []:
+    if inliers is None or len(inliers) == 0:
         ax.set_title('Current image with no RANSAC inliers and outliers')
         return
     if isinstance(inliers, np.ndarray):
@@ -291,7 +291,7 @@ def interface_plot_camera_trajectory_2d(ax, translations, ground_truth):
     # Plot the 2D trajectory
     ax.plot(trajectory[:, 0], trajectory[:, 1], marker='o', linestyle='-', color='blue', label='Estimated Trajectory')
 
-    if ground_truth != []:
+    if len(ground_truth) > 0:
         # Extract x, y ground truth values and plot them
         ground_truth = np.array(ground_truth)
         ax.plot(ground_truth[:, 0], ground_truth[:, 1], linestyle='--', color='black', label='Ground Truth')
@@ -347,7 +347,7 @@ def interface_plot_camera_trajectory_3d(ax, translations, rotations, ground_trut
     for i in range(num_points - 1):
         ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], trajectory[i:i+2, 2], color=colors[i])
 
-    if ground_truth != []:
+    if len(ground_truth) >0:
         # Plot ground truth trajectory
         ground_truth = np.array(ground_truth)
         ax.plot(ground_truth[:, 0], ground_truth[:, 1], np.zeros_like(ground_truth[:, 1]), color='black', label='Ground Truth')

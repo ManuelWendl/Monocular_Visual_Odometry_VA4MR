@@ -9,7 +9,7 @@ from utils import load_data_set,load_frame
 ds = 0  # 0: KITTI, 1: Malaga, 2: parking
 debug = True
 interface_plot = True
-num_frames_to_process = 300 # 2761 (Kitti) 
+num_frames_to_process = 200 # 2761 (Kitti) 
 stride = 2 if ds == 1 else 1  # Stride for frame processing
 bootstrap_frames = [100,101+stride]
 
