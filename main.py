@@ -8,10 +8,10 @@ from utils import load_data_set,load_frame
 # Setup
 ds = 1  # 0: KITTI, 1: Malaga, 2: parking
 debug = False
-interface_plot = False
-num_frames_to_process = 300 # 2761 (Kitti) , 2121 (Malaga) , 598 (Parking)
+interface_plot = True
+num_frames_to_process = 100 # 2761 (Kitti) , 2121 (Malaga) , 598 (Parking)
 stride = 1  # Stride for frame processing
-bootstrap_frames = [0,3+stride]
+bootstrap_frames = [600,603]
 
 # Working bootstraps####
 # KITTI: [0, 1+stride]
@@ -78,7 +78,7 @@ for i in range(bootstrap_frames[1] + 1,bootstrap_frames[1] + 1+  num_frames_to_p
 
     if debug: plot_camera_trajectory(positions_list, rotations_list,ground_truth, VO.matched_landmarks, show_rot=False)
 
-    if i % 50 == 0: 
+    if interface_plot or i % 50 == 0: 
         inlier_pts_current = VO.inlier_pts_current
         outlier_pts_current = VO.outlier_pts_current
         num_tracked_landmarks_list = VO.num_tracked_landmarks_list
