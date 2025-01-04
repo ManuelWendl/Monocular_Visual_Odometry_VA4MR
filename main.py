@@ -11,7 +11,7 @@ debug = False
 interface_plot = True
 num_frames_to_process = 100 # 2761 (Kitti) , 2121 (Malaga) , 598 (Parking)
 stride = 1  # Stride for frame processing
-bootstrap_frames = [600,603]
+bootstrap_frames = [0,3]
 
 # Working bootstraps####
 # KITTI: [0, 1+stride]
