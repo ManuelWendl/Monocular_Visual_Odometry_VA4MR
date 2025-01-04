@@ -7,7 +7,7 @@ from plotting_tools import reprojection_error_plot
 class VisualOdometryPipeLine:
     def __init__(self, K, options):
         self.options = options
-        self.sift = cv2.SIFT_create(nfeatures=500)  # Simple SIFT detector
+        self.sift = cv2.SIFT_create()  # Simple SIFT detector
         self.K = K                                  # Camera matrix
         self.matcher = cv2.BFMatcher()              # Matcher for feature matching
 
@@ -39,7 +39,7 @@ class VisualOdometryPipeLine:
         self.repr_error_max = []
         self.repr_error_below_threshold = []
     
-    def get_World_Camera_Pose(self,R,t):
+    def invert_transform(self,R,t):
         Rnew = R.T
         tnew = -Rnew @ t
         return Rnew, tnew
@@ -57,48 +57,73 @@ class VisualOdometryPipeLine:
 
     def triangulate_landmarks(self, R_current_CW, t_current_CW):
 
-        def check_baseline(u_current, v_current, u_last, v_last):
+        def check_baseline(first_key, current_key, R_past_CW, R_current_CW):
 
-            def get_ray(u,v):
-                w = np.ones_like(u)
-                vec_current = np.vstack((u,v,w))
-                return vec_current / np.linalg.norm(vec_current, axis=0)
+            def get_ray(pts): 
+                pts.reshape(2,1)               
+                hom = np.hstack((pts, [1]))
+                return hom.reshape(3,1)
+            
+            K_inv = np.linalg.inv(self.K)
         
-            vec_current = get_ray(u_current, v_current)
-            vec_last = get_ray(u_last, v_last)
+            vec_current = get_ray(current_key)
+            vec_past = get_ray(first_key)
 
-            cos = np.sum(vec_current.T*vec_last.T, axis=1) / (np.linalg.norm(vec_current, axis=0) * np.linalg.norm(vec_last, axis=0))
+            vec_current = K_inv @ vec_current
+
+            rel_rot = (R_current_CW.T @ R_past_CW).T
+            vec_past = np.matmul(rel_rot,K_inv) @ vec_past
+
+            cos = np.sum(vec_current.T*vec_past.T, axis=1) / (np.linalg.norm(vec_current, axis=0) * np.linalg.norm(vec_past, axis=0))
             cos = np.clip(cos, -1.0, 1.0)
             alphas = np.degrees(np.arccos(cos))
             return alphas < self.options['min_baseline_angle']
         
-        # Filter keypoints with small baseline
-        too_short_baseline = check_baseline(self.potential_keys[:,0], self.potential_keys[:,1], self.potential_first_keys[:,0], self.potential_first_keys[:,1])
-
         def disambguate_landmark(R_current_CW, t_current_CW, R_last_CW, t_last_CW, landmark):
-            dist = np.linalg.norm(R_current_CW @ landmark + t_current_CW)
-            z_current_C = R_current_CW @ landmark + t_current_CW
-            z_last_C = R_last_CW @ landmark + t_last_CW
-            return z_current_C[2] > 0 and z_last_C[2] > 0 and dist > self.options['min_dist_landmarks'] and dist < self.options['max_dist_landmarks']
+            ray_current = R_current_CW @ landmark + t_current_CW
+            ray_past = R_last_CW @ landmark + t_last_CW
+            z_current_C = ray_current[2]
+            z_past_C = ray_past[2]
+            return z_current_C > self.options['min_dist_landmarks'] and z_past_C > self.options['min_dist_landmarks'] and z_current_C < self.options['max_dist_landmarks'] and z_past_C < self.options['max_dist_landmarks']
+
+        def check_reproj_error(R,t,landmark,keypoint,K):
+            P = self.K@np.hstack((R,t))
+            reproj = P@np.vstack((landmark,[1]))
+            reproj = reproj[:2]/reproj[2]
+            error = np.linalg.norm(keypoint - reproj)
+            return error < self.options['Reproj_threshold']
+
+
+        R_current_WC, t_current_WC = self.invert_transform(R_current_CW, t_current_CW)
+
+        too_short_baseline = np.zeros((self.potential_keys.shape[0],), dtype=bool)
 
         for i in range(self.potential_keys.shape[0]):
-            if too_short_baseline[i]:
+            # Get transform of first keypoint from transform list
+            if len(self.transforms) > 1:
+                if len(self.transforms)-self.potential_transforms[i] <= self.options['min_baseline_frames']:
+                    too_short_baseline[i] = True
+                    continue
+
+            R_past_CW, t_past_CW = self.transforms[int(self.potential_transforms[i])]
+
+            if check_baseline(self.potential_first_keys[i,:], self.potential_keys[i,:], R_past_CW, R_current_CW):
+                too_short_baseline[i] = True
                 continue
 
-            # Get transform of first keypoint from transform list
-            R_past_CW, t_past_CW = self.transforms[int(self.potential_transforms[i])]
+            R_past_WC, t_past_WC = self.invert_transform(R_past_CW, t_past_CW)
 
             # Triangulate points
             new_landmark = cv2.triangulatePoints(
-                self.K@np.hstack((R_past_CW, t_past_CW)),
-                self.K@np.hstack((R_current_CW, t_current_CW)),
+                self.K@np.hstack((R_past_WC, t_past_WC)),
+                self.K@np.hstack((R_current_WC, t_current_WC)),
                 self.potential_first_keys[i].reshape(-1, 1),
                 self.potential_keys[i].reshape(-1, 1)
             )
             new_landmark = new_landmark[:3] / new_landmark[3]
             
-            if True: #disambguate_landmark(R_current_CW, t_current_CW, R_past_CW, t_past_CW, new_landmark):
-                if len(self.matched_landmarks) == 0:
+            if disambguate_landmark(R_current_WC, t_current_WC, R_past_WC, t_past_WC, new_landmark):
+                if self.matched_landmarks == []:
                     self.matched_landmarks = new_landmark.T
                     self.matched_keypoints = self.potential_keys[i].reshape(1,2)
                     self.matched_descriptors = self.potential_descriptors[i].reshape(1,-1)
@@ -106,19 +131,22 @@ class VisualOdometryPipeLine:
                     self.matched_landmarks = np.append(self.matched_landmarks,new_landmark.T, axis=0)
                     self.matched_keypoints = np.append(self.matched_keypoints, self.potential_keys[i].reshape(1,2), axis=0)
                     self.matched_descriptors = np.append(self.matched_descriptors, self.potential_descriptors[i].reshape(1,-1), axis=0)
+            else:
+                too_short_baseline[i] = True
+        
 
         self.filter_potential(too_short_baseline)
-        
-    def feature_matching(self, img0, img1):
 
-        def ratio_test(matches):
-            good_matches = []
-            for m,n in matches:
-                if m.distance < self.options['feature_ratio']*n.distance:
-                    good_matches.append(m)
-                
-            return good_matches
-    
+    def ratio_test(self,matches):
+        good_matches = []
+        for m,n in matches:
+            if m.distance < self.options['feature_ratio']*n.distance:
+                good_matches.append(m)
+            
+        return good_matches
+        
+    def initial_feature_matching(self, img0, img1):
+
         # Detect keypoints and compute descriptors
         keypoints0, descriptors0 = self.sift.detectAndCompute(img0, None)
         keypoints1, descriptors1 = self.sift.detectAndCompute(img1, None)
@@ -127,57 +155,83 @@ class VisualOdometryPipeLine:
         matches = self.matcher.knnMatch(descriptors0, descriptors1,k=2)
             
         # Apply ratio test
-        good_matches = ratio_test(matches)
-
-        # Check with allready matched and potential descriptors
-        if len(self.matched_descriptors) > 0:
-            joint_descriptors = np.append(self.matched_descriptors,self.potential_descriptors,axis=0)   
-            used_matches = self.matcher.knnMatch(descriptors1, joint_descriptors, k=2)
-
-            good_used_matches = ratio_test(used_matches)
-        
-            # Filter matches with allready matched and potential descriptors
-            mask_used = np.isin(np.array(good_matches), good_used_matches)
-            good_matches = np.array(good_matches)[~mask_used]
+        good_matches = self.ratio_test(matches)
 
         # Extract matched keypoints
         pts0 = np.float32([keypoints0[m.queryIdx].pt for m in good_matches]).reshape(-1, 2)
         pts1 = np.float32([keypoints1[m.trainIdx].pt for m in good_matches]).reshape(-1, 2)
 
         # Store potential features for next image
-        if self.potentail_frame is None:
-            self.potential_keys = pts1
-            self.potential_first_keys = pts0
-            self.potential_descriptors = np.float32([descriptors1[m.trainIdx] for m in good_matches])
-            self.potential_transforms = np.ones((len(pts1), 1)) * (len(self.transforms)-1)  
-        else:
-            self.potential_keys = np.append(self.potential_keys, pts1, axis=0)
-            self.potential_first_keys = np.append(self.potential_first_keys, pts0, axis=0)
-            self.potential_descriptors = np.append(self.potential_descriptors, np.float32([descriptors1[m.trainIdx] for m in good_matches]), axis=0)
-            self.potential_transforms = np.append(self.potential_transforms,(np.ones((len(pts1), 1)) * (len(self.transforms)-1)), axis=0)
+        if len(good_matches) > 0:
+            if self.potentail_frame is None:
+                self.potential_keys = pts1
+                self.potential_first_keys = pts0
+                self.potential_descriptors = np.float32([descriptors1[m.trainIdx] for m in good_matches])
+                self.potential_transforms = np.ones((len(pts1), 1)) * (len(self.transforms)-1)  
+            else:
+                self.potential_keys = np.append(self.potential_keys, pts1, axis=0)
+                self.potential_first_keys = np.append(self.potential_first_keys, pts0, axis=0)
+                self.potential_descriptors = np.append(self.potential_descriptors, np.float32([descriptors1[m.trainIdx] for m in good_matches]), axis=0)
+                self.potential_transforms = np.append(self.potential_transforms,(np.ones((len(pts1), 1)) * (len(self.transforms)-1)), axis=0)
             
         self.potentail_frame = img1
+
+    def feature_adding(self, img):
+
+        pts = cv2.goodFeaturesToTrack(img, maxCorners=1400, qualityLevel=0.1, minDistance=10, mask=None).squeeze()
+        keypts = cv2.KeyPoint.convert(pts)
+        _, desc = self.sift.compute(img, keypts)
+        
+        valid_dist = np.array([np.all(np.linalg.norm(pts[i,:] - self.potential_keys, axis=1) > 10) for i in range(pts.shape[0])])
+        pts = pts[valid_dist]
+        desc = desc[valid_dist]
+
+        if self.potential_keys.shape[0] == 0:
+            self.potential_keys = pts
+            self.potential_first_keys = pts
+            self.potential_descriptors = desc
+            self.potential_transforms = np.ones((len(pts), 1)) * len(self.transforms)
+        else:
+            self.potential_keys = np.append(self.potential_keys, pts, axis=0)
+            self.potential_first_keys = np.append(self.potential_first_keys, pts, axis=0)
+            self.potential_descriptors = np.append(self.potential_descriptors, desc, axis=0)
+            self.potential_transforms = np.append(self.potential_transforms, np.ones((len(pts), 1)) * len(self.transforms), axis=0)
+
+        self.potentail_frame = img
+
     
     def feature_tracking(self, img):
 
+        klt_parameters = {
+            'winSize': (15, 15),
+            'maxLevel': 10,
+            'criteria': (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.03)
+        }
+
         # Track landmarks with KLT:
-        matched_pts, status, _ = cv2.calcOpticalFlowPyrLK(self.potentail_frame, img, self.matched_keypoints, None)
+        matched_pts, status, _ = cv2.calcOpticalFlowPyrLK(self.potentail_frame, img, self.matched_keypoints, None, **klt_parameters)
         tracked = (status == 1).squeeze()
         self.matched_keypoints = matched_pts[tracked]
         self.matched_landmarks = self.matched_landmarks[tracked]
         self.matched_descriptors = self.matched_descriptors[tracked]
 
-        # Track potential features with KLT:
-        potential_pts, status, _ = cv2.calcOpticalFlowPyrLK(self.potentail_frame, img, self.potential_keys, None)
-        tracked = (status == 1).squeeze()
-        self.potential_keys = potential_pts
-        self.filter_potential(tracked)
+
+        if self.potential_keys.shape[0] > 1:
+            # Track potential features with KLT:
+            potential_pts, status, _ = cv2.calcOpticalFlowPyrLK(self.potentail_frame, img, self.potential_keys, None, **klt_parameters)
+            tracked = (status == 1).squeeze()
+            self.potential_keys = potential_pts
+            self.filter_potential(tracked)
         self.potentail_frame = img
+
+    def non_lin_refine_pose(self, R_vec, t, landmarks, keypoints, K):
+        R_refined, t_refined = cv2.solvePnPRefineLM(landmarks, keypoints, K, np.zeros(4), R_vec, t, criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 100, 1e-2))
+        return R_refined, t_refined
 
 
     def initialization(self, img0, img1):
 
-        self.feature_matching(img0, img1)
+        self.initial_feature_matching(img0, img1)
 
         # Estimate Essential matrix:
         E, ransac_mask = cv2.findEssentialMat(self.potential_first_keys, self.potential_keys, self.K, method=cv2.RANSAC, prob=0.99, threshold=1)
@@ -188,6 +242,8 @@ class VisualOdometryPipeLine:
 
         # Estimate relative camera pose of new second frame
         _, R_current_CW, t_current_CW,_ = cv2.recoverPose(E, self.potential_first_keys, self.potential_keys, self.K)
+
+        t_current_CW *= np.sign(t_current_CW[2])*2
 
         self.triangulate_landmarks(R_current_CW, t_current_CW)
        
@@ -203,9 +259,15 @@ class VisualOdometryPipeLine:
         success = False
 
         if len(self.matched_keypoints) >= 8:
-            success, R_CW, t_CW, inliers = cv2.solvePnPRansac(self.matched_landmarks, self.matched_keypoints, self.K, np.zeros(0), flags=cv2.SOLVEPNP_ITERATIVE, confidence=self.options['PnP_conf'] ,reprojectionError=self.options['PnP_error'])
+            success, R_WC, t_WC, inliers = cv2.solvePnPRansac(self.matched_landmarks, self.matched_keypoints, self.K, np.zeros(4), flags=cv2.SOLVEPNP_P3P, confidence=self.options['PnP_conf'], reprojectionError=self.options['PnP_error'],iterationsCount=self.options['PnP_iterations'])
 
-            R_CW, _ = cv2.Rodrigues(R_CW)
+            # Refine pose with non-linear optimization
+            if self.options['non_lin_refinement']:
+                R_WC, t_WC = self.non_lin_refine_pose(R_WC, t_WC, self.matched_landmarks, self.matched_keypoints, self.K)
+
+            R_WC = cv2.Rodrigues(R_WC)[0]
+
+            R_CW, t_CW = self.invert_transform(R_WC, t_WC)
             
             if success:
                 if self.repr_error_plot:
@@ -235,7 +297,7 @@ class VisualOdometryPipeLine:
                 self.outlier_pts_current = self.matched_keypoints[~mask]
                 self.inlier_pts_current = self.matched_keypoints[mask]
 
-                self.filter_landmarks(mask)
+                # self.filter_landmarks(mask)
 
         if not success:
             raise Exception("PnP Failed")
@@ -247,13 +309,11 @@ class VisualOdometryPipeLine:
             self.num_tracked_landmarks_list.append(len(self.inlier_pts_current))
 
         # Triangulate new landmarks
-        self.triangulate_landmarks(R_CW, t_CW)
+        if self.potential_keys.shape[0] > 1:
+            self.triangulate_landmarks(R_CW, t_CW)
 
         # Get new features
-        if self.matched_landmarks.shape[0] < 500 or self.potential_keys.shape[0] < 500:
-            self.feature_matching(self.potentail_frame, img)
-        else:
-            self.potentail_frame = img
+        self.feature_adding(img)
 
         self.transforms.append((R_CW, t_CW))
 

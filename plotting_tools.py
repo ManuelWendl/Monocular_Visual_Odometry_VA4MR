@@ -107,59 +107,30 @@ def plot_camera_trajectory(translations, rotations, ground_truth, landmarks, sho
     colors = [hsv_to_rgb((hue, 1, 1)) for hue in hues]
 
     # Plot the trajectory in 3D
-    fig = plt.figure(figsize=(10, 7))
-    ax = fig.add_subplot(111, projection='3d')
-
+    plt.figure(figsize=(10, 7))
     # Plot trajectory line with rainbow colors
     for i in range(num_points - 1):
-        ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 1], trajectory[i:i+2, 2], color=colors[i])
+        plt.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 2], color=colors[i])
 
     if len(ground_truth) > 0:
         # Plot ground truth trajectory
         ground_truth = np.array(ground_truth)
-        ax.plot(ground_truth[:, 0], ground_truth[:, 1], np.zeros_like(ground_truth[:, 1]), color='black', label='Ground Truth')
+        plt.plot(ground_truth[:, 0], ground_truth[:, 1], color='black', label='Ground Truth')
 
     if len(landmarks) > 0:
         # Plot landmarks
         landmarks = np.array(landmarks)
-        ax.scatter(landmarks[:, 0], landmarks[:, 1], landmarks[:, 2], color='orange', s=10, label='Landmarks')
+        plt.scatter(landmarks[:, 0], landmarks[:, 2], color='orange', s=10, label='Landmarks')
 
-    if show_rot:
-        # Plot orientation at each trajectory point
-        for t, R in zip(trajectory, camera_axes):
-            origin = t
-            scale = 1.0
-            x_axis = origin + R[:, 0] * scale  # Scale axis for visualization
-            y_axis = origin + R[:, 1] * scale
-            z_axis = origin + R[:, 2] * scale
-
-            ax.quiver(origin[0], origin[1], origin[2],
-                      x_axis[0] - origin[0], x_axis[1] - origin[1], x_axis[2] - origin[2],
-                      color='red', label='X-axis' if t is trajectory[0] else "")
-            ax.quiver(origin[0], origin[1], origin[2],
-                      y_axis[0] - origin[0], y_axis[1] - origin[1], y_axis[2] - origin[2],
-                      color='green', label='Y-axis' if t is trajectory[0] else "")
-            ax.quiver(origin[0], origin[1], origin[2],
-                      z_axis[0] - origin[0], z_axis[1] - origin[1], z_axis[2] - origin[2],
-                      color='blue', label='Z-axis' if t is trajectory[0] else "")
-    else:
-        # Plot spheres at each translation endpoint
-        for i, (t, color) in enumerate(zip(trajectory, colors)):
-            size = 100 if i == 0 else 50  # First sphere is twice the size
-            ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
+    for i, (t, color) in enumerate(zip(trajectory, colors)):
+        size = 100 if i == 0 else 50  # First sphere is twice the size
+        plt.scatter(t[0], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
 
     # Set labels and title
-    ax.set_xlabel("X")
-    ax.set_ylabel("Y")
-    ax.set_zlabel("Z")
-    ax.set_title(f"Camera Trajectory ({'with rotations' if show_rot else 'only translations'})")
+    plt.title(f"Camera Trajectory ({'with rotations' if show_rot else 'only translations'})")
     #ax.legend()
 
-    ax.axis('auto')
-
-    plt.xlim(-50,50)
-    plt.ylim(-50, 50)
-    ax.set_zlim(-50, 50)
+    plt.axis('auto')
 
     plt.savefig('out/camera_trajectory.png')
     plt.pause(0.1)
@@ -283,13 +254,13 @@ def interface_plot_camera_trajectory_2d(ax, translations, ground_truth):
             raise ValueError("Each translation must have shape (3,) or (3, 1).")
 
         # Append only x, y coordinates
-        trajectory.append(t[:2])  # Take the first two elements (x, y)
+        trajectory.append(t[:3])  # Take the first two elements (x, y)
 
     # Convert trajectory to numpy array for easier plotting
     trajectory = np.array(trajectory)
 
     # Plot the 2D trajectory
-    ax.plot(trajectory[:, 0], trajectory[:, 1], marker='o', linestyle='-', color='blue', label='Estimated Trajectory')
+    ax.plot(trajectory[:, 0], trajectory[:, 2], marker='o', linestyle='-', color='blue', label='Estimated Trajectory')
 
     if len(ground_truth) > 0:
         # Extract x, y ground truth values and plot them
@@ -374,10 +345,8 @@ def interface_plot_camera_trajectory_3d(ax, translations, rotations, ground_trut
         # Plot spheres at each translation endpoint
         for i, (t, color) in enumerate(zip(trajectory, colors)):
             size = 100 if i == 0 else 50  # First sphere is twice the size
-            ax.scatter(t[0], t[1], t[2], color=color, s=size, label='Translation Point' if i == 0 else "")
+            ax.scatter(t[0], t[2], t[1], color=color, s=size, label='Translation Point' if i == 0 else "")
 
-    ax.set_ylim3d([-20, 20])
-    ax.set_zlim3d([-5, 20])
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.set_zlabel("Z")
