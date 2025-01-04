@@ -152,7 +152,6 @@ def plot_num_tracked_keypoints(num_tracked_keypoints_in_each_frame,stride):
     plt.grid(True)
     #plt.legend()
 
-    # Show the plot
     plt.savefig('out/num_tracked_keypoints.png')
     plt.close()
 
@@ -160,7 +159,6 @@ def plot_num_tracked_keypoints(num_tracked_keypoints_in_each_frame,stride):
 def plot_interface(image, inliers, outliers, translations, rotations, ground_truth, num_tracked_landmarks_list, landmarks):
     fig = plt.figure(figsize=(10, 6))
 
-    # Add subplots to the figure
     ax1 = fig.add_subplot(2, 2, 1)  # Top-left (inliers outliers)
     ax2 = fig.add_subplot(2, 2, 2)  # Top-right (trajectory of last 20 frames and landmarks)
     ax3 = fig.add_subplot(2, 2, 3)  # Bottom-left (num of tracked landmarks of 20 last frames)
@@ -173,36 +171,30 @@ def plot_interface(image, inliers, outliers, translations, rotations, ground_tru
     interface_plot_camera_trajectory_2d_20_prev(ax4, translations, ground_truth, landmarks)
     interface_plot_num_tracked_landmarks(ax3, num_tracked_landmarks_list)
 
-    # Adjust layout and save the plot
     plt.tight_layout()
-    plt.savefig('out/interface_plot.png')  # Save the plot to a file
-    plt.close()  # Close the figure to avoid display in interactive environments
+    plt.savefig('out/interface_plot.png')
+    plt.close()
 
 
 
 def interface_plot_num_tracked_landmarks(ax, num_tracked_landmarks_list):
     ax.set_title('# of tracked landmarks over the last 20 frames')
 
-    # Calculate the maximum value in the list
     max_value = max(num_tracked_landmarks_list) if num_tracked_landmarks_list else 0
 
     # Set y-axis range dynamically
     if max_value > 200:
-        ax.set_ylim([0, max_value + 10])  # Add a small margin
+        ax.set_ylim([0, max_value + 10])
     else:
         ax.set_ylim([0, 200])
 
-    # Generate dynamic x-values based on the length of the list
     num_points = len(num_tracked_landmarks_list)
     x_values = list(range(-num_points, 0))
-    # Set x-ticks for every 5th point, if possible
     ticks = [x for x in x_values if x % 5 == 0]
     ax.set_xticks(ticks)
 
-    # Plot the data
     ax.plot(x_values, num_tracked_landmarks_list, marker='o', linestyle='-', color='firebrick')
 
-    # Optional: Add labels and grid
     ax.set_xlabel("Frames")
     ax.set_ylabel("# of Tracked Landmarks")
     ax.grid(True, linestyle='--', alpha=0.5)
@@ -251,31 +243,30 @@ def interface_plot_camera_trajectory_2d(ax, translations, ground_truth):
 
     for t in translations:
         if t.shape == (3, 1):
-            t = t.flatten()  # Convert (3, 1) to (3,)
+            t = t.flatten()
         if t.shape != (3,):
             raise ValueError("Each translation must have shape (3,) or (3, 1).")
 
-        # Append only x, y coordinates
-        trajectory.append(t[:3])  # Take the first two elements (x, y)
+        trajectory.append(t[:3])
 
-    # Convert trajectory to numpy array for easier plotting
     trajectory = np.array(trajectory)
 
-    # Plot the 2D trajectory
-    ax.plot(trajectory[:, 0], trajectory[:, 2], marker='o', linestyle='-', color='blue', label='Estimated Trajectory')
+    num_points = len(trajectory)
+    hues = np.linspace(0, 1, num_points)
+    colors = [hsv_to_rgb((hue, 1, 1)) for hue in hues]
+
+    for i in range(num_points - 1):
+        ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 2], color=colors[i], marker='o', linestyle='-')
 
     if len(ground_truth) > 0:
-        # Extract x, y ground truth values and plot them
         ground_truth = np.array(ground_truth)
         ax.plot(ground_truth[:, 0], ground_truth[:, 1], linestyle='--', color='black', label='Ground Truth')
 
-    # Add labels and title
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.set_title("Full Trajectory")
     ax.legend(loc='upper right', fontsize=7)
 
-    # Optional: Set equal aspect ratio for a proper spatial view
     ax.axis('equal')
     ax.grid(True, linestyle='--', alpha=0.5)
 
@@ -287,56 +278,50 @@ def interface_plot_camera_trajectory_2d_20_prev(ax, translations, ground_truth, 
 
     for t in translations:
         if t.shape == (3, 1):
-            t = t.flatten()  # Convert (3, 1) to (3,)
+            t = t.flatten()
         if t.shape != (3,):
             raise ValueError("Each translation must have shape (3,) or (3, 1).")
 
-        # Append only x, y coordinates
-        trajectory.append(t[:3])  # Take the first three elements (x, y, z)
+        trajectory.append(t[:3])
 
-    # Convert trajectory to numpy array for easier plotting
     trajectory = np.array(trajectory)
 
-    # Plot the 2D trajectory
-    ax.plot(trajectory[:, 0], trajectory[:, 2], marker='o', linestyle='-', color='blue', label='Estimated Trajectory')
+    num_points = len(trajectory)
+    hues = np.linspace(0, 1, num_points)
+    colors = [hsv_to_rgb((hue, 1, 1)) for hue in hues]
+
+    for i in range(num_points - 1):
+        ax.plot(trajectory[i:i+2, 0], trajectory[i:i+2, 2], color=colors[i], marker='o', linestyle='-')
 
     if len(ground_truth) > 0:
-        # Extract x, y ground truth values and plot them
         ground_truth = np.array(ground_truth)
         ax.plot(ground_truth[:, 0], ground_truth[:, 1], linestyle='--', color='black', label='Ground Truth')
 
     if len(landmarks) > 0:
-        # Plot landmarks
         landmarks = np.array(landmarks)
         ax.scatter(landmarks[:, 0], landmarks[:, 2], color='orange', s=10, label='Landmarks')
 
-        # Calculate min and max values including landmarks
         x_min = min(trajectory[:, 0].min(), landmarks[:, 0].min())
         x_max = max(trajectory[:, 0].max(), landmarks[:, 0].max())
         y_min = min(trajectory[:, 2].min(), landmarks[:, 2].min())
         y_max = max(trajectory[:, 2].max(), landmarks[:, 2].max())
     else:
-        # Calculate min and max values based only on the trajectory
         x_min, x_max = trajectory[:, 0].min(), trajectory[:, 0].max()
         y_min, y_max = trajectory[:, 2].min(), trajectory[:, 2].max()
 
-    # Add a small margin to the limits
     x_margin = (x_max - x_min) * 0.1 if x_max != x_min else 1
     y_margin = (y_max - y_min) * 0.1 if y_max != y_min else 1
 
     ax.set_xlim([x_min - x_margin, x_max + x_margin])
     ax.set_ylim([y_min - y_margin, y_max + y_margin])
 
-    # Add labels and title
     ax.set_xlabel("X")
     ax.set_ylabel("Y")
     ax.set_title("Trajectory with Landmarks (over last 20 frames)")
     ax.legend(loc='upper right', fontsize=7)
 
-    # Optional: Set equal aspect ratio for a proper spatial view
-    ax.set_aspect('auto')  # Allow dynamic scaling
+    ax.set_aspect('auto')
     ax.grid(True, linestyle='--', alpha=0.5)
-
 
 
 
