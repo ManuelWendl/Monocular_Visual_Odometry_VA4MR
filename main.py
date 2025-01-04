@@ -6,12 +6,19 @@ from plotting_tools import plot_camera_trajectory, plot_num_tracked_keypoints, i
 from utils import load_data_set,load_frame
 
 # Setup
-ds = 0  # 0: KITTI, 1: Malaga, 2: parking
+ds = 1  # 0: KITTI, 1: Malaga, 2: parking
 debug = False
 interface_plot = False
-num_frames_to_process = 2761 # 2761 (Kitti) 
-stride = 2 if ds == 1 else 1  # Stride for frame processing
-bootstrap_frames = [0,1+stride]
+num_frames_to_process = 300 # 2761 (Kitti) , 2121 (Malaga) , 598 (Parking)
+stride = 1  # Stride for frame processing
+bootstrap_frames = [0,3+stride]
+
+# Working bootstraps####
+# KITTI: [0, 1+stride]
+# Malaga: [0, ?] # Stride 3 works good
+# Parking: [0, 3+stride]
+#########################
+
 
 # Options
 options = {
@@ -19,12 +26,12 @@ options = {
     'max_dist_landmarks': 100,
     'min_baseline_angle': 2,
     'min_baseline_frames': 2,
-    'feature_ratio': 0.8,
+    'feature_ratio': 0.5,
     'PnP_conf': 0.99,
-    'PnP_error': 10,
+    'PnP_error': 5,
     'PnP_iterations': 100,
     'Reproj_threshold': 100,
-    'non_lin_refinement': False,
+    'non_lin_refinement': False
 }
 
 
@@ -56,7 +63,7 @@ if debug: plot_camera_trajectory(positions_list, rotations_list,ground_truth, VO
 print("Commencing continuous operation")
 
 #for i in range(bootstrap_frames[1] + 1, last_frame + 1):
-for i in range(bootstrap_frames[1] + 1, num_frames_to_process): #first make it run for the first frames and extend later
+for i in range(bootstrap_frames[1] + 1,bootstrap_frames[1] + 1+  num_frames_to_process,stride): #first make it run for the first frames and extend later
     print(f'\n\nProcessing frame {i}\n=====================')
     image = load_frame(ds, i, malaga_left_images)
 
@@ -71,7 +78,7 @@ for i in range(bootstrap_frames[1] + 1, num_frames_to_process): #first make it r
 
     if debug: plot_camera_trajectory(positions_list, rotations_list,ground_truth, VO.matched_landmarks, show_rot=False)
 
-    if interface_plot: 
+    if i % 50 == 0: 
         inlier_pts_current = VO.inlier_pts_current
         outlier_pts_current = VO.outlier_pts_current
         num_tracked_landmarks_list = VO.num_tracked_landmarks_list
