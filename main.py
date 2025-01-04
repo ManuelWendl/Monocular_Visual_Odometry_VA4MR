@@ -83,7 +83,7 @@ for i in range(bootstrap_frames[1] + 1,bootstrap_frames[1] + 1+  num_frames_to_p
         outlier_pts_current = VO.outlier_pts_current
         num_tracked_landmarks_list = VO.num_tracked_landmarks_list
         plot_interface(image, inlier_pts_current, outlier_pts_current, 
-                       positions_list, rotations_list, ground_truth, num_tracked_landmarks_list)
+                       positions_list, rotations_list, ground_truth, num_tracked_landmarks_list, VO.matched_landmarks)
 
 
 print(f"VO pipeline executed over {num_frames_to_process} frames")
@@ -92,7 +92,7 @@ inlier_pts_current = VO.inlier_pts_current
 outlier_pts_current = VO.outlier_pts_current
 num_tracked_landmarks_list = VO.num_tracked_landmarks_list
 plot_interface(image, inlier_pts_current, outlier_pts_current, 
-               positions_list, rotations_list, ground_truth, num_tracked_landmarks_list)
+               positions_list, rotations_list, ground_truth, num_tracked_landmarks_list, VO.matched_landmarks)
 
 # Plot camera trajectory
 plot_camera_trajectory(positions_list, rotations_list,ground_truth, [], show_rot=False)
