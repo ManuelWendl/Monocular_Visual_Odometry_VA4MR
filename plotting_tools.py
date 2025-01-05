@@ -137,9 +137,9 @@ def plot_camera_trajectory(translations, rotations, ground_truth, landmarks, sho
     plt.close()
 
 
-def plot_num_tracked_keypoints(num_tracked_keypoints_in_each_frame,stride):
+def plot_num_tracked_keypoints(num_tracked_keypoints_in_each_frame):
 
-    time_steps = np.arange(len(num_tracked_keypoints_in_each_frame))*stride
+    time_steps = np.arange(len(num_tracked_keypoints_in_each_frame))
 
     # Plot the numbers over time steps
     plt.figure(figsize=(8, 5))

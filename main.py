@@ -2,37 +2,127 @@ import os
 import numpy as np
 import cv2
 from VisualOdometryPipeLine import VisualOdometryPipeLine
-from plotting_tools import plot_camera_trajectory, plot_num_tracked_keypoints, inferface_plot_inliers_outliers, plot_interface
+from plotting_tools import plot_camera_trajectory, plot_num_tracked_keypoints, plot_interface
 from utils import load_data_set,load_frame
 
 # Setup
 ds = 1  # 0: KITTI, 1: Malaga, 2: parking
 debug = False
-interface_plot = True
-num_frames_to_process = 100 # 2761 (Kitti) , 2121 (Malaga) , 598 (Parking)
-stride = 1  # Stride for frame processing
-bootstrap_frames = [0,3]
+interface_plot = False
 
-# Working bootstraps####
-# KITTI: [0, 1+stride]
-# Malaga: [0, ?] # Stride 3 works good
-# Parking: [0, 3+stride]
-#########################
+if ds == 0:
+    last_frame = 2761 # 2761
+    bootstrap_frames = [0,2]
 
+    options = {
+    # Landmark options
+    'min_dist_landmarks': 0,
+    'max_dist_landmarks': 200,
+    'min_baseline_angle': 2,
+    'min_baseline_frames': 2,
+    
+    # Feature detection options
+    'feature_ratio': 0.8,
+    'feature_max_corners': 1400,
+    'feature_quality_level': 0.1,
+    'feature_min_dist': 10,
+    'feature_block_size': 3,
+    'feature_use_harris': False,
 
-# Options
-options = {
+    # KLT options
+    'winSize': (15, 15),
+    'maxLevel': 10,
+    'criteria': (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.03),
+
+    # PnP options
+    'PnP_conf': 0.99,
+    'PnP_error': 8,
+    'PnP_iterations': 500,
+
+    # Non-linear refinement options
+    'non_lin_refinement': False,
+    'non_lin_refinement_max_iter': 30,
+    'non_lin_refinement_eps': 1e-5,
+
+    # Discard outliers
+    'discard_outliers': True,
+    }
+
+elif ds == 1:
+    last_frame = 2120
+    bootstrap_frames = [0,6]
+
+    options = {
+    # Landmark options
     'min_dist_landmarks': 0,
     'max_dist_landmarks': 100,
     'min_baseline_angle': 2,
     'min_baseline_frames': 2,
-    'feature_ratio': 0.5,
+    
+    # Feature detection options
+    'feature_ratio': 0.8,
+    'feature_max_corners': 1400,
+    'feature_quality_level': 0.03,
+    'feature_min_dist': 10,
+    'feature_block_size': 3,
+    'feature_use_harris': False,
+
+    # KLT options
+    'winSize': (15, 15),
+    'maxLevel': 10,
+    'criteria': (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.01),
+
+    # PnP options
     'PnP_conf': 0.99,
     'PnP_error': 5,
-    'PnP_iterations': 100,
-    'Reproj_threshold': 100,
-    'non_lin_refinement': False
-}
+    'PnP_iterations': 500,
+
+    # Non-linear refinement options
+    'non_lin_refinement': False,
+    'non_lin_refinement_max_iter': 30,
+    'non_lin_refinement_eps': 1e-5,
+
+    # Discard outliers
+    'discard_outliers': True,
+    }
+    
+elif ds == 2:
+    last_frame = 598
+    bootstrap_frames = [0,6]
+
+    options = {
+    # Landmark options
+    'min_dist_landmarks': 1,
+    'max_dist_landmarks': 50,
+    'min_baseline_angle': 2,
+    'min_baseline_frames': 2,
+    
+    # Feature detection options
+    'feature_ratio': 0.8,
+    'feature_max_corners': 1400,
+    'feature_quality_level': 0.1,
+    'feature_min_dist': 10,
+    'feature_block_size': 3,
+    'feature_use_harris': False,
+
+    # KLT options
+    'winSize': (15, 15),
+    'maxLevel': 10,
+    'criteria': (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.02),
+
+    # PnP options
+    'PnP_conf': 0.99,
+    'PnP_error': 5,
+    'PnP_iterations': 500,
+
+    # Non-linear refinement options
+    'non_lin_refinement': False,
+    'non_lin_refinement_max_iter': 30,
+    'non_lin_refinement_eps': 1e-5,
+
+    # Discard outliers
+    'discard_outliers': True,
+    }
 
 
 # Tracking data
@@ -62,8 +152,7 @@ if debug: plot_camera_trajectory(positions_list, rotations_list,ground_truth, VO
 # CONTINUOUS OPERATION 
 print("Commencing continuous operation")
 
-#for i in range(bootstrap_frames[1] + 1, last_frame + 1):
-for i in range(bootstrap_frames[1] + 1,bootstrap_frames[1] + 1+  num_frames_to_process,stride): #first make it run for the first frames and extend later
+for i in range(bootstrap_frames[1] + 1, last_frame): 
     print(f'\n\nProcessing frame {i}\n=====================')
     image = load_frame(ds, i, malaga_left_images)
 
@@ -86,7 +175,7 @@ for i in range(bootstrap_frames[1] + 1,bootstrap_frames[1] + 1+  num_frames_to_p
                        positions_list, rotations_list, ground_truth, num_tracked_landmarks_list, VO.matched_landmarks)
 
 
-print(f"VO pipeline executed over {num_frames_to_process} frames")
+print(f"VO pipeline executed over {last_frame} frames")
 
 inlier_pts_current = VO.inlier_pts_current
 outlier_pts_current = VO.outlier_pts_current
@@ -98,5 +187,5 @@ plot_interface(image, inlier_pts_current, outlier_pts_current,
 plot_camera_trajectory(positions_list, rotations_list,ground_truth, [], show_rot=False)
 
 # Plot number of tracked keypoints
-plot_num_tracked_keypoints(num_tracked_keypoints, stride)
+plot_num_tracked_keypoints(num_tracked_keypoints)
 
