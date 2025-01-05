@@ -2,16 +2,15 @@ import os
 import numpy as np
 import cv2
 from VisualOdometryPipeLine import VisualOdometryPipeLine
-from plotting_tools import plot_camera_trajectory, plot_num_tracked_keypoints, plot_interface
+from plotting_tools import plot_interface
 from utils import load_data_set,load_frame
 
 # Setup
 ds = 2  # 0: KITTI, 1: Malaga, 2: parking
-debug = False
 interface_plot = False
 
 if ds == 0:
-    last_frame = 2761 # 2761
+    last_frame = 2761
     bootstrap_frames = [0,2]
 
     options = {
@@ -123,8 +122,6 @@ positions_list.append(t)
 rotations_list.append(R)
 num_tracked_keypoints.append(VO.num_pts[-1])
 
-if debug: plot_camera_trajectory(positions_list, rotations_list,ground_truth, VO.matched_landmarks, show_rot=False)
-
 # CONTINUOUS OPERATION 
 print("Commencing continuous operation")
 
@@ -141,7 +138,6 @@ for i in range(bootstrap_frames[1] + 1, last_frame):
     rotations_list.append(R)
     num_tracked_keypoints.append(VO.num_pts[-1])
 
-    if debug: plot_camera_trajectory(positions_list, rotations_list,ground_truth, VO.matched_landmarks, show_rot=False)
 
     if interface_plot or i % 50 == 0: 
         inlier_pts_current = VO.inlier_pts_current
@@ -150,7 +146,6 @@ for i in range(bootstrap_frames[1] + 1, last_frame):
         plot_interface(image, inlier_pts_current, outlier_pts_current, 
                        positions_list, rotations_list, ground_truth, num_tracked_landmarks_list, VO.matched_landmarks)
 
-
 print(f"VO pipeline executed over {last_frame} frames")
 
 inlier_pts_current = VO.inlier_pts_current
@@ -158,10 +153,3 @@ outlier_pts_current = VO.outlier_pts_current
 num_tracked_landmarks_list = VO.num_tracked_landmarks_list
 plot_interface(image, inlier_pts_current, outlier_pts_current, 
                positions_list, rotations_list, ground_truth, num_tracked_landmarks_list, VO.matched_landmarks)
-
-# Plot camera trajectory
-plot_camera_trajectory(positions_list, rotations_list,ground_truth, [], show_rot=False)
-
-# Plot number of tracked keypoints
-plot_num_tracked_keypoints(num_tracked_keypoints)
-
