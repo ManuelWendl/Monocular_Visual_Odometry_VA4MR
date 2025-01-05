@@ -295,26 +295,6 @@ class VisualOdometryPipeLine:
             tracked = (status == 1).squeeze()
             self.potential_keys = potential_pts
             self.filter_potential(tracked)
-            
-
-    def non_lin_refine_pose(self, R_WC, t_WC, landmarks, keypoints, K):
-        """
-        Non-linear refinement of camera pose using triangulated landmarks and keypoints.
-
-        Args:
-            R_WC (np.array): Rotation matrix of camera pose
-            t_WC (np.array): Translation vector of camera pose
-            landmarks (np.array): Landmarks 
-            keypoints (np.array): Keypoints
-            K (np.array): Camera matrix
-
-        Returns:
-            R_refined (np.array): Refined rotation matrix
-            t_refined (np.array): Refined translation vector
-        """
-        R_WC_vec = cv2.Rodrigues(R_WC)[0]
-        R_refined, t_refined = cv2.solvePnPRefineLM(landmarks, keypoints, K, np.zeros(4), R_WC_vec, t_WC, criteria=(cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, self.options['non_lin_refinement_max_iter'], self.options['non_lin_refinement_eps']))
-        return R_refined, t_refined
 
 
     def initialization(self, img0, img1):
@@ -365,28 +345,22 @@ class VisualOdometryPipeLine:
         success = False
 
         if len(self.matched_keypoints) >= 8:
-            success, R_WC, t_WC, inliers = cv2.solvePnPRansac(self.matched_landmarks, self.matched_keypoints, self.K, np.zeros(4), flags=cv2.SOLVEPNP_P3P, confidence=self.options['PnP_conf'], reprojectionError=self.options['PnP_error'],iterationsCount=self.options['PnP_iterations'])
+            success, R_WC_vec, t_WC, inliers = cv2.solvePnPRansac(self.matched_landmarks, self.matched_keypoints, self.K, np.zeros(4), flags=cv2.SOLVEPNP_P3P, confidence=self.options['PnP_conf'], reprojectionError=self.options['PnP_error'],iterationsCount=self.options['PnP_iterations'])
 
-            R_WC = cv2.Rodrigues(R_WC)[0]
-
-            R_CW, t_CW = self.invert_transform(R_WC, t_WC)
-
-            if self.options['non_lin_refinement']:
-                R_WC_vec, t_WC = self.non_lin_refine_pose(R_WC, t_WC, self.matched_landmarks, self.matched_keypoints, self.K)
-                R_WC = cv2.Rodrigues(R_WC_vec)[0]
-                R_CW, t_CW = self.invert_transform(R_WC, t_WC)
-            
             if success:
                 mask = np.isin(np.arange(len(self.matched_landmarks)), inliers.squeeze()).astype(np.bool)
 
                 self.outlier_pts_current = self.matched_keypoints[~mask]
                 self.inlier_pts_current = self.matched_keypoints[mask]
+                self.filter_landmarks(mask)
+            else:
+                raise ValueError("PnP failed")
 
-                if self.options['discard_outliers']:
-                    self.filter_landmarks(mask)
+            R_WC = cv2.Rodrigues(R_WC_vec)[0]
+            R_CW, t_CW = self.invert_transform(R_WC, t_WC)
 
-        if not success:
-            raise Exception("PnP Failed")
+        else: 
+            raise ValueError("Not enough keypoints for PnP")
 
         if len(self.num_tracked_landmarks_list) < 20:
             self.num_tracked_landmarks_list.append(len(self.inlier_pts_current))

@@ -6,7 +6,7 @@ from plotting_tools import plot_camera_trajectory, plot_num_tracked_keypoints, p
 from utils import load_data_set,load_frame
 
 # Setup
-ds = 1  # 0: KITTI, 1: Malaga, 2: parking
+ds = 2  # 0: KITTI, 1: Malaga, 2: parking
 debug = False
 interface_plot = False
 
@@ -16,8 +16,8 @@ if ds == 0:
 
     options = {
     # Landmark options
-    'min_dist_landmarks': 0,
-    'max_dist_landmarks': 200,
+    'min_dist_landmarks': 1,
+    'max_dist_landmarks': 150,
     'min_baseline_angle': 2,
     'min_baseline_frames': 2,
     
@@ -31,21 +31,13 @@ if ds == 0:
 
     # KLT options
     'winSize': (15, 15),
-    'maxLevel': 10,
-    'criteria': (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.03),
+    'maxLevel': 5,
+    'criteria': (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.01),
 
     # PnP options
     'PnP_conf': 0.99,
     'PnP_error': 8,
     'PnP_iterations': 500,
-
-    # Non-linear refinement options
-    'non_lin_refinement': False,
-    'non_lin_refinement_max_iter': 30,
-    'non_lin_refinement_eps': 1e-5,
-
-    # Discard outliers
-    'discard_outliers': True,
     }
 
 elif ds == 1:
@@ -76,14 +68,6 @@ elif ds == 1:
     'PnP_conf': 0.99,
     'PnP_error': 5,
     'PnP_iterations': 500,
-
-    # Non-linear refinement options
-    'non_lin_refinement': False,
-    'non_lin_refinement_max_iter': 30,
-    'non_lin_refinement_eps': 1e-5,
-
-    # Discard outliers
-    'discard_outliers': True,
     }
     
 elif ds == 2:
@@ -114,14 +98,6 @@ elif ds == 2:
     'PnP_conf': 0.99,
     'PnP_error': 5,
     'PnP_iterations': 500,
-
-    # Non-linear refinement options
-    'non_lin_refinement': False,
-    'non_lin_refinement_max_iter': 30,
-    'non_lin_refinement_eps': 1e-5,
-
-    # Discard outliers
-    'discard_outliers': True,
     }
 
 
