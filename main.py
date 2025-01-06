@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 t_start = time.time()
 
 # Setup
-ds = 1  # 0: KITTI, 1: Malaga, 2: parking
+ds = 0  # 0: KITTI, 1: Malaga, 2: parking
 interface_plot = True
 
 if ds == 0:

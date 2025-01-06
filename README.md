@@ -8,8 +8,13 @@ The pipeline was tested on three different datasets, which can be accessed on th
 The pipeline was implemented in Python 3.8 and the required packages are given in the conda environment file `environment.yml`. To create the conda environment, run the following command:
 
 ```bash
-conda env create -f environment.yml
+conda env create -f cvenv.yml
 ```
+and activate the environment with:
+```bash
+conda activate cvenv
+```
+
 Using a virtual environment, the required packages are given in the `requirements.txt` file. To create the virtual environment, run the following command:
 
 ```bash
