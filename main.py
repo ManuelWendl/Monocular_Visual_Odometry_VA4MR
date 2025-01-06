@@ -4,12 +4,13 @@ import numpy as np
 import cv2
 from VisualOdometryPipeLine import VisualOdometryPipeLine
 from utils import load_data_set,load_frame
+import matplotlib
 import matplotlib.pyplot as plt
 
 t_start = time.time()
 
 # Setup
-ds = 0  # 0: KITTI, 1: Malaga, 2: parking
+ds = 1  # 0: KITTI, 1: Malaga, 2: parking
 interface_plot = True
 
 if ds == 0:
@@ -57,13 +58,13 @@ elif ds == 1:
     'feature_ratio': 0.8,
     'feature_max_corners': 1400,
     'feature_quality_level': 0.03,
-    'feature_min_dist': 15,
+    'feature_min_dist': 10,
     'feature_block_size': 3,
     'feature_use_harris': False,
 
     # KLT options
     'winSize': (15, 15),
-    'maxLevel': 5,
+    'maxLevel': 10,
     'criteria': (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.01),
 
     # PnP options
@@ -130,7 +131,8 @@ if interface_plot:
     axs[0,0].legend(loc=4, borderaxespad=0.)
 
     trajectory_plot = axs[0,1].plot(translations[:, 0], translations[:, 2], 'bo-', linewidth=1, markersize=3, label='Trajectory')
-    axs[0,1].plot(ground_truth[:, 0], ground_truth[:, 1], 'k--', label='Ground Truth')
+    if len(ground_truth) >0:
+        axs[0,1].plot(ground_truth[:, 0], ground_truth[:, 1], 'k--', label='Ground Truth')
     axs[0,1].set_title("Full Trajectory")
     axs[0,1].set_xlabel("X")
     axs[0,1].set_ylabel("Y")
@@ -142,12 +144,18 @@ if interface_plot:
     axs[1,0].set_ylabel("# of Tracked Landmarks")
 
     trajectory_plot1 = axs[1,1].plot(translations[:, 0], translations[:, 2], 'bo-', linewidth=1, markersize=3, label='Trajectory')
-    axs[1,1].plot(ground_truth[:, 0], ground_truth[:, 1], 'k--', label='Ground Truth')
+    if len(ground_truth) >0:
+        axs[1,1].plot(ground_truth[:, 0], ground_truth[:, 1], 'k--', label='Ground Truth')
     landmaeks_plot = axs[1,1].plot(VO.matched_landmarks[:, 0], VO.matched_landmarks[:, 2], 'ro', markersize=6, label='Landmarks')
     axs[1,1].set_title('Landmarks over the last 20 frames')
     axs[1,1].set_xlabel("X")
     axs[1,1].set_ylabel("Y")
     axs[1,1].legend()
+
+    if matplotlib.get_backend() != 'agg':
+        plt.pause(0.001)
+    else:
+        plt.savefig('out/interface_plot.png')
 
 
 # CONTINUOUS OPERATION 
@@ -174,7 +182,10 @@ for i in range(bootstrap_frames[1] + 1, last_frame):
         axs[0,1].set_xlim([min(translations[:,0])-100,max(translations[:,0])+100])
         axs[0,1].set_ylim([min(translations[:,2])-100,max(translations[:,2])+100])
 
-        num_tracked_landmarks_plot[0].set_data(np.arange(i-min(i,21),i-1),num_tracked_keypoints[max(-i,-20):])
+        if i > bootstrap_frames[1] + 20:
+            num_tracked_landmarks_plot[0].set_data(np.arange(i-19,i+1),num_tracked_keypoints[-20:])
+        else:
+            num_tracked_landmarks_plot[0].set_data(np.arange(bootstrap_frames[1],i+1),num_tracked_keypoints)
         axs[1,0].set_xlim([i-min(i,21),i-1])
         axs[1,0].set_ylim([min(num_tracked_keypoints[max(-i,-20):])-10,max(num_tracked_keypoints[max(-i,-20):])+10])
 
@@ -182,10 +193,11 @@ for i in range(bootstrap_frames[1] + 1, last_frame):
         landmaeks_plot[0].set_data(VO.matched_landmarks[:, 0], VO.matched_landmarks[:, 2])
         axs[1,1].set_xlim([translations[-1,0] - 100, translations[-1,0] + 100])
         axs[1,1].set_ylim([translations[-1,2] - 100, translations[-1,2] + 100])
-        plt.pause(0.001)
-        # If matplotlib is not using a GUI backend, save the plot to a file
-        # plt.savefig('out/interface_plot.png')
-        # time.sleep(0.01)        
+        
+        if matplotlib.get_backend() != 'agg':
+            plt.pause(0.001)
+        else:
+            plt.savefig('out/interface_plot.png')
 
 
 plt.savefig('out/interface_plot.png')

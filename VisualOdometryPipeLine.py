@@ -102,7 +102,6 @@ class VisualOdometryPipeLine:
 
         self.matched_landmarks = self.matched_landmarks[mask,:]
         self.matched_keypoints = self.matched_keypoints[mask,:]
-        self.matched_descriptors = self.matched_descriptors[mask,:]
 
 
     def triangulate_landmarks(self, R_current_CW, t_current_CW):
@@ -198,11 +197,9 @@ class VisualOdometryPipeLine:
                 if len(self.matched_landmarks) == 0:
                     self.matched_landmarks = new_landmark.T
                     self.matched_keypoints = self.potential_keys[i].reshape(1,2)
-                    self.matched_descriptors = self.potential_descriptors[i].reshape(1,-1)
                 else:
                     self.matched_landmarks = np.append(self.matched_landmarks,new_landmark.T, axis=0)
                     self.matched_keypoints = np.append(self.matched_keypoints, self.potential_keys[i].reshape(1,2), axis=0)
-                    self.matched_descriptors = np.append(self.matched_descriptors, self.potential_descriptors[i].reshape(1,-1), axis=0)
             else:
                 too_short_baseline[i] = True
         
@@ -285,7 +282,6 @@ class VisualOdometryPipeLine:
         tracked = (status == 1).squeeze()
         self.matched_keypoints = matched_pts[tracked]
         self.matched_landmarks = self.matched_landmarks[tracked]
-        self.matched_descriptors = self.matched_descriptors[tracked]
 
         if self.potential_keys.shape[0] > 1:
             potential_pts, status, _ = cv2.calcOpticalFlowPyrLK(self.potential_frame, img, self.potential_keys, None, **klt_params)
