@@ -1,13 +1,16 @@
 import os
+import time
 import numpy as np
 import cv2
 from VisualOdometryPipeLine import VisualOdometryPipeLine
-from plotting_tools import plot_interface
 from utils import load_data_set,load_frame
+import matplotlib.pyplot as plt
+
+t_start = time.time()
 
 # Setup
-ds = 2  # 0: KITTI, 1: Malaga, 2: parking
-interface_plot = False
+ds = 0  # 0: KITTI, 1: Malaga, 2: parking
+interface_plot = True
 
 if ds == 0:
     last_frame = 2761
@@ -54,13 +57,13 @@ elif ds == 1:
     'feature_ratio': 0.8,
     'feature_max_corners': 1400,
     'feature_quality_level': 0.03,
-    'feature_min_dist': 10,
+    'feature_min_dist': 15,
     'feature_block_size': 3,
     'feature_use_harris': False,
 
     # KLT options
     'winSize': (15, 15),
-    'maxLevel': 10,
+    'maxLevel': 5,
     'criteria': (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 50, 0.01),
 
     # PnP options
@@ -100,10 +103,9 @@ elif ds == 2:
     }
 
 
-# Tracking data
-num_tracked_keypoints = []
-positions_list = []
-rotations_list = []
+if interface_plot:
+    fig, axs = plt.subplots(2, 2, figsize=(10, 6))
+
 
 # Load data set
 K, img0, img1, malaga_left_images, ground_truth = load_data_set(ds, bootstrap_frames)
@@ -115,12 +117,38 @@ print(f'\n\nProcessing frame {bootstrap_frames[1]}\n=====================')
 VO = VisualOdometryPipeLine(K, options)
 VO.initialization(img0, img1)
 
-R = VO.transforms[-1][0]
 t = VO.transforms[-1][1]
 
-positions_list.append(t)
-rotations_list.append(R)
-num_tracked_keypoints.append(VO.num_pts[-1])
+translations = np.array(t).reshape(-1,3)
+num_tracked_keypoints = np.array([VO.num_pts[-1]]).reshape(-1,1)
+
+if interface_plot:
+    image_plot = axs[0,0].imshow(img1, cmap='gray')
+    outlier_plot = axs[0,0].plot(VO.outlier_pts_current[:, 0], VO.outlier_pts_current[:, 1], 'rx', markersize=6, label='Outliers')
+    inlier_plot = axs[0,0].plot(VO.inlier_pts_current[:, 0], VO.inlier_pts_current[:, 1], 'gx', markersize=6, label='Inliers')
+    axs[0,0].set_title('Current image with RANSAC inliers and outliers')
+    axs[0,0].legend(loc=4, borderaxespad=0.)
+
+    trajectory_plot = axs[0,1].plot(translations[:, 0], translations[:, 2], 'bo-', linewidth=1, markersize=3, label='Trajectory')
+    axs[0,1].plot(ground_truth[:, 0], ground_truth[:, 1], 'k--', label='Ground Truth')
+    axs[0,1].set_title("Full Trajectory")
+    axs[0,1].set_xlabel("X")
+    axs[0,1].set_ylabel("Y")
+    axs[0,1].legend()
+
+    num_tracked_landmarks_plot = axs[1,0].plot([0],num_tracked_keypoints, '-', color='black', linewidth=1)
+    axs[1,0].set_title('# of tracked landmarks over the last 20 frames')
+    axs[1,0].set_xlabel("Frames")
+    axs[1,0].set_ylabel("# of Tracked Landmarks")
+
+    trajectory_plot1 = axs[1,1].plot(translations[:, 0], translations[:, 2], 'bo-', linewidth=1, markersize=3, label='Trajectory')
+    axs[1,1].plot(ground_truth[:, 0], ground_truth[:, 1], 'k--', label='Ground Truth')
+    landmaeks_plot = axs[1,1].plot(VO.matched_landmarks[:, 0], VO.matched_landmarks[:, 2], 'ro', markersize=6, label='Landmarks')
+    axs[1,1].set_title('Landmarks over the last 20 frames')
+    axs[1,1].set_xlabel("X")
+    axs[1,1].set_ylabel("Y")
+    axs[1,1].legend()
+
 
 # CONTINUOUS OPERATION 
 print("Commencing continuous operation")
@@ -131,25 +159,39 @@ for i in range(bootstrap_frames[1] + 1, last_frame):
 
     VO.continuous_operation(image)
 
-    R = VO.transforms[-1][0]
     t = VO.transforms[-1][1]
 
-    positions_list.append(t)
-    rotations_list.append(R)
-    num_tracked_keypoints.append(VO.num_pts[-1])
+    translations = np.append(translations, t.T, axis=0)
+    num_tracked_keypoints = np.append(num_tracked_keypoints, VO.num_pts[-1])
+
+    if interface_plot: 
+        image_plot.set_data(image)
+        if VO.outlier_pts_current.shape[0] > 0:
+            outlier_plot[0].set_data(VO.outlier_pts_current[:, 0], VO.outlier_pts_current[:, 1])
+        inlier_plot[0].set_data(VO.inlier_pts_current[:, 0], VO.inlier_pts_current[:, 1])
+
+        trajectory_plot[0].set_data(translations[:, 0], translations[:, 2])
+        axs[0,1].set_xlim([min(translations[:,0])-100,max(translations[:,0])+100])
+        axs[0,1].set_ylim([min(translations[:,2])-100,max(translations[:,2])+100])
+
+        num_tracked_landmarks_plot[0].set_data(np.arange(i-min(i,21),i-1),num_tracked_keypoints[max(-i,-20):])
+        axs[1,0].set_xlim([i-min(i,21),i-1])
+        axs[1,0].set_ylim([min(num_tracked_keypoints[max(-i,-20):])-10,max(num_tracked_keypoints[max(-i,-20):])+10])
+
+        trajectory_plot1[0].set_data(translations[max(-i,-20):, 0], translations[max(-i,-20):, 2])
+        landmaeks_plot[0].set_data(VO.matched_landmarks[:, 0], VO.matched_landmarks[:, 2])
+        axs[1,1].set_xlim([translations[-1,0] - 100, translations[-1,0] + 100])
+        axs[1,1].set_ylim([translations[-1,2] - 100, translations[-1,2] + 100])
+        plt.pause(0.001)
+        # If matplotlib is not using a GUI backend, save the plot to a file
+        # plt.savefig('out/interface_plot.png')
+        # time.sleep(0.01)        
 
 
-    if interface_plot or i % 50 == 0: 
-        inlier_pts_current = VO.inlier_pts_current
-        outlier_pts_current = VO.outlier_pts_current
-        num_tracked_landmarks_list = VO.num_tracked_landmarks_list
-        plot_interface(image, inlier_pts_current, outlier_pts_current, 
-                       positions_list, rotations_list, ground_truth, num_tracked_landmarks_list, VO.matched_landmarks)
+plt.savefig('out/interface_plot.png')
 
 print(f"VO pipeline executed over {last_frame} frames")
 
-inlier_pts_current = VO.inlier_pts_current
-outlier_pts_current = VO.outlier_pts_current
-num_tracked_landmarks_list = VO.num_tracked_landmarks_list
-plot_interface(image, inlier_pts_current, outlier_pts_current, 
-               positions_list, rotations_list, ground_truth, num_tracked_landmarks_list, VO.matched_landmarks)
+time_elapsed = time.time() - t_start
+
+print(f"Time elapsed: {time_elapsed/60:.2f} min")

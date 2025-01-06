@@ -35,7 +35,8 @@ class VisualOdometryPipeLine:
         self.sift = cv2.SIFT_create()               # SIFT detector
         self.matcher = cv2.BFMatcher()              # Matcher for feature matching
         self.K = K                                  # Camera matrix
-        
+        self.K_inv = np.linalg.inv(K)               # Inverse of camera matrix
+
         self.num_pts = []                           # List to store number of tracked landmarks
         self.transforms = []                        # List to store camera transformations
 
@@ -87,7 +88,8 @@ class VisualOdometryPipeLine:
         self.potential_keys = self.potential_keys[mask,:]
         self.potential_first_keys = self.potential_first_keys[mask,:]
         self.potential_transforms = self.potential_transforms[mask,:]
-        self.potential_descriptors = self.potential_descriptors[mask,:]
+        if self.potential_descriptors.shape[0] == mask.shape[0]:
+            self.potential_descriptors = self.potential_descriptors[mask,:]
 
 
     def filter_landmarks(self, mask):
@@ -131,16 +133,14 @@ class VisualOdometryPipeLine:
                 pts.reshape(2,1)               
                 hom = np.hstack((pts, [1]))
                 return hom.reshape(3,1)
-            
-            K_inv = np.linalg.inv(self.K)
-        
+                    
             vec_current = get_ray(current_key)
             vec_past = get_ray(first_key)
 
-            vec_current = K_inv @ vec_current
+            vec_current = self.K_inv @ vec_current
 
             rel_rot = (R_current_CW.T @ R_past_CW).T
-            vec_past = np.matmul(rel_rot,K_inv) @ vec_past
+            vec_past = np.matmul(rel_rot,self.K_inv) @ vec_past
 
             cos = np.sum(vec_current.T*vec_past.T, axis=1) / (np.linalg.norm(vec_current, axis=0) * np.linalg.norm(vec_past, axis=0))
             cos = np.clip(cos, -1.0, 1.0)
@@ -169,6 +169,7 @@ class VisualOdometryPipeLine:
             return z_current_C > self.options['min_dist_landmarks'] and z_past_C > self.options['min_dist_landmarks'] and z_current_C < self.options['max_dist_landmarks'] and z_past_C < self.options['max_dist_landmarks']
 
         R_current_WC, t_current_WC = self.invert_transform(R_current_CW, t_current_CW)
+        T_current = self.K@np.hstack((R_current_WC, t_current_WC))
         too_short_baseline = np.zeros((self.potential_keys.shape[0],), dtype=bool)
 
         for i in range(self.potential_keys.shape[0]):
@@ -187,7 +188,7 @@ class VisualOdometryPipeLine:
 
             new_landmark = cv2.triangulatePoints(
                 self.K@np.hstack((R_past_WC, t_past_WC)),
-                self.K@np.hstack((R_current_WC, t_current_WC)),
+                T_current,
                 self.potential_first_keys[i].reshape(-1, 1),
                 self.potential_keys[i].reshape(-1, 1)
             )
@@ -246,6 +247,7 @@ class VisualOdometryPipeLine:
                 self.potential_descriptors = np.append(self.potential_descriptors, np.float32([descriptors1[m.trainIdx] for m in good_matches]), axis=0)
                 self.potential_transforms = np.append(self.potential_transforms,(np.ones((len(pts1), 1)) * (len(self.transforms)-1)), axis=0)
             
+            
     def feature_adding(self, img):
         """
         Adding new features duing continuous operation. Use properly distanced features to avoid duplicates.
@@ -255,22 +257,17 @@ class VisualOdometryPipeLine:
         """
 
         pts = cv2.goodFeaturesToTrack(img, maxCorners=self.options['feature_max_corners'], qualityLevel=self.options['feature_quality_level'], minDistance=self.options['feature_min_dist'], blockSize=self.options['feature_block_size'],useHarrisDetector=self.options['feature_use_harris'], mask=None).squeeze()
-        keypts = cv2.KeyPoint.convert(pts)
-        _, desc = self.sift.compute(img, keypts)
         
         valid_dist = np.array([np.all(np.linalg.norm(pts[i,:] - self.potential_keys, axis=1) > self.options['feature_min_dist']) for i in range(pts.shape[0])])
         pts = pts[valid_dist]
-        desc = desc[valid_dist]
 
         if self.potential_keys.shape[0] == 0:
             self.potential_keys = pts
             self.potential_first_keys = pts
-            self.potential_descriptors = desc
             self.potential_transforms = np.ones((len(pts), 1)) * len(self.transforms)
         else:
             self.potential_keys = np.append(self.potential_keys, pts, axis=0)
             self.potential_first_keys = np.append(self.potential_first_keys, pts, axis=0)
-            self.potential_descriptors = np.append(self.potential_descriptors, desc, axis=0)
             self.potential_transforms = np.append(self.potential_transforms, np.ones((len(pts), 1)) * len(self.transforms), axis=0)
 
     
@@ -315,6 +312,8 @@ class VisualOdometryPipeLine:
         E, ransac_mask = cv2.findEssentialMat(self.potential_first_keys, self.potential_keys, self.K, method=cv2.RANSAC, prob=0.99, threshold=1)
 
         inliers = ransac_mask.ravel() == 1
+        self.outlier_pts_current = self.potential_keys[~inliers]
+        self.inlier_pts_current = self.potential_keys[inliers]
         self.filter_potential(inliers)
 
         _, R_current_CW, t_current_CW,_ = cv2.recoverPose(E, self.potential_first_keys, self.potential_keys, self.K)
