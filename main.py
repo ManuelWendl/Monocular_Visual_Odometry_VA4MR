@@ -105,7 +105,7 @@ elif ds == 2:
 
 
 if interface_plot:
-    fig, axs = plt.subplots(2, 2, figsize=(10, 6))
+    fig, axs = plt.subplots(2, 2, figsize=(10,8))
 
 
 # Load data set
@@ -136,7 +136,7 @@ if interface_plot:
     axs[0,1].set_title("Full Trajectory")
     axs[0,1].set_xlabel("X")
     axs[0,1].set_ylabel("Y")
-    axs[0,1].legend()
+    axs[0,1].legend(loc=4, borderaxespad=0.)
 
     num_tracked_landmarks_plot = axs[1,0].plot([0],num_tracked_keypoints, '-', color='black', linewidth=1)
     axs[1,0].set_title('# of tracked landmarks over the last 20 frames')
@@ -150,7 +150,9 @@ if interface_plot:
     axs[1,1].set_title('Landmarks over the last 20 frames')
     axs[1,1].set_xlabel("X")
     axs[1,1].set_ylabel("Y")
-    axs[1,1].legend()
+    axs[1,1].legend(loc=4, borderaxespad=0.)
+
+    plt.tight_layout()
 
     if matplotlib.get_backend() != 'agg':
         plt.pause(0.001)
@@ -179,8 +181,8 @@ for i in range(bootstrap_frames[1] + 1, last_frame):
         inlier_plot[0].set_data(VO.inlier_pts_current[:, 0], VO.inlier_pts_current[:, 1])
 
         trajectory_plot[0].set_data(translations[:, 0], translations[:, 2])
-        axs[0,1].set_xlim([min(translations[:,0])-100,max(translations[:,0])+100])
-        axs[0,1].set_ylim([min(translations[:,2])-100,max(translations[:,2])+100])
+        axs[0,1].set_xlim([min(translations[:,0])-options["max_dist_landmarks"],max(translations[:,0])+options["max_dist_landmarks"]])
+        axs[0,1].set_ylim([min(translations[:,2])-options["max_dist_landmarks"],max(translations[:,2])+options["max_dist_landmarks"]])
 
         if i > bootstrap_frames[1] + 20:
             num_tracked_landmarks_plot[0].set_data(np.arange(i-19,i+1),num_tracked_keypoints[-20:])
@@ -191,8 +193,8 @@ for i in range(bootstrap_frames[1] + 1, last_frame):
 
         trajectory_plot1[0].set_data(translations[max(-i,-20):, 0], translations[max(-i,-20):, 2])
         landmaeks_plot[0].set_data(VO.matched_landmarks[:, 0], VO.matched_landmarks[:, 2])
-        axs[1,1].set_xlim([translations[-1,0] - 100, translations[-1,0] + 100])
-        axs[1,1].set_ylim([translations[-1,2] - 100, translations[-1,2] + 100])
+        axs[1,1].set_xlim([translations[-1,0] - options["max_dist_landmarks"], translations[-1,0] + options["max_dist_landmarks"]])
+        axs[1,1].set_ylim([translations[-1,2] - options["max_dist_landmarks"], translations[-1,2] + options["max_dist_landmarks"]])
         
         if matplotlib.get_backend() != 'agg':
             plt.pause(0.001)
