@@ -3,6 +3,8 @@
 This repository contains a locally consistent monocular visual odometry pipeline. This pipeline is based on the lecture contents of the course "Vision Algorithms for Autonomous Robots" at ETH Zurich/UZH taught by Prof. Dr. Davide Scaramuzza in the spring autumn semester 2024/25. The pipeline estimates the camera position (vehicle pose) with respect to the camera frame of the first image from a sequence of images. 
 The pipeline was tested on three different datasets, which can be accessed on the [Robot Perception Group website](http://rpg.ifi.uzh.ch/davis_data.html). The datasets are: KITTI, Parking and Malaga.
 
+![Alt text](./example_plot.png?raw=true)
+
 ## Dependencies
 
 The pipeline was implemented in Python 3.8 and the required packages are given in the conda environment file `environment.yml`. To create the conda environment, run the following command:
